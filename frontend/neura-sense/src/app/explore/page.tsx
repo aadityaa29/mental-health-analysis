@@ -41,7 +41,7 @@ export default function Explore() {
 
   return (
     <nav>
-      <Navbar/>
+      {/* <Navbar/> */}
     
     <main className="min-h-screen bg-gradient-to-b from-white to-indigo-50 px-6 md:px-16 py-12">
       {/* Header */}
