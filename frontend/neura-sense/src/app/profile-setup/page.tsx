@@ -18,15 +18,52 @@ import {
   Youtube,
   Loader2,
   Check,
+  Music,
+  MessageSquare,
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { getAuth } from "firebase/auth";
 
 export default function ProfileSetupPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+
+// twitter
+   const handleTwitterConnect = async () => {
+      const user = getAuth().currentUser;
+      if (!user) {
+        alert("Please sign in first.");
+        return;
+      }
+  
+      const url = `/api/connect/twitter?uid=${user.uid}`;
+      window.location.href = url; // Redirects to Twitter OAuth
+    };
+// reddit
+    async function connectReddit() {
+  const user = getAuth().currentUser;
+  if (!user) {
+    alert("You must be signed in!");
+    return;
+  }
+
+  const token = await user.getIdToken();
+  window.location.href = `/api/auth/reddit?token=${token}`;
+}
+// spotify
+async function connectSpotify() {
+  const user = getAuth().currentUser;
+  if (!user) {
+    alert("You must be signed in!");
+    return;
+  }
+
+  const token = await user.getIdToken();
+  window.location.href = `/api/auth/spotify?token=${token}`;
+}
 
   // Basic
   const [name, setName] = useState("");
@@ -85,6 +122,7 @@ export default function ProfileSetupPage() {
   const [discordHandle, setDiscordHandle] = useState("");
   const [redditHandle, setRedditHandle] = useState("");
 
+  
   // Step / progress
   const [step, setStep] = useState(1);
 
@@ -408,15 +446,62 @@ export default function ProfileSetupPage() {
                     <Label>Connect social media (connect at least one)</Label>
                     <p className="text-xs text-gray-500">Connecting allows deeper analysis and activity insights. You can connect more later.</p>
                     <div className="flex flex-wrap gap-3 mt-3">
-                      <Button variant={connected.twitter ? 'secondary' : 'outline'} disabled={connected.twitter || loading} onClick={() => handleConnect('twitter')}>
-                        <Twitter className="mr-2" /> {connected.twitter ? 'Connected' : 'Connect Twitter'} {connected.twitter && <Check className="ml-2" />}
-                      </Button>
+                      {/* Twitter */}
+                <Button
+                  variant="outline"
+                  disabled={loading || connected.twitter}
+                  onClick={handleTwitterConnect}
+                >
+                  {connected.twitter ? (
+                    <>
+                      <Twitter className="mr-2 text-sky-500" /> Connected
+                    </>
+                  ) : (
+                    <>
+                      <Twitter className="mr-2 text-sky-500" /> Connect Twitter
+                    </>
+                  )}
+                </Button>
+  {/* Spotify */}
+                <Button
+                  variant="outline"
+                  disabled={loading || connected.spotify}
+                  onClick={connectSpotify}
+                >
+                  {connected.spotify ? (
+                    <>
+                      <Music className="mr-2 text-green-500" /> Connected
+                    </>
+                  ) : (
+                    <>
+                      <Music className="mr-2 text-green-500" /> Connect Spotify
+                    </>
+                  )}
+                </Button>
 
-                      <Button variant={connected.instagram ? 'secondary' : 'outline'} disabled={connected.instagram || loading} onClick={() => handleConnect('instagram')}>
+{/* reddit */}
+                      <Button
+                  variant="outline"
+                  disabled={loading || connected.reddit}
+                  onClick={connectReddit}
+                >
+                  {connected.reddit ? (
+                    <>
+                      <MessageSquare className="mr-2 text-orange-500" /> Connected
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="mr-2 text-orange-500" /> Connect
+                      Reddit
+                    </>
+                  )}
+                </Button>
+
+                      {/* <Button variant={connected.instagram ? 'secondary' : 'outline'} disabled={connected.instagram || loading} onClick={() => handleConnect('instagram')}>
                         <Instagram className="mr-2" /> {connected.instagram ? 'Connected' : 'Connect Instagram'} {connected.instagram && <Check className="ml-2" />}
-                      </Button>
+                      </Button> */}
 
-                      <Button variant={connected.linkedin ? 'secondary' : 'outline'} disabled={connected.linkedin || loading} onClick={() => handleConnect('linkedin')}>
+                      {/* <Button variant={connected.linkedin ? 'secondary' : 'outline'} disabled={connected.linkedin || loading} onClick={() => handleConnect('linkedin')}>
                         <Linkedin className="mr-2" /> {connected.linkedin ? 'Connected' : 'Connect LinkedIn'} {connected.linkedin && <Check className="ml-2" />}
                       </Button>
 
@@ -426,7 +511,7 @@ export default function ProfileSetupPage() {
 
                       <Button variant={connected.youtube ? 'secondary' : 'outline'} disabled={connected.youtube || loading} onClick={() => handleConnect('youtube')}>
                         <Youtube className="mr-2" /> {connected.youtube ? 'Connected' : 'Connect YouTube'} {connected.youtube && <Check className="ml-2" />}
-                      </Button>
+                      </Button> */}
                     </div>
 
                     {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
