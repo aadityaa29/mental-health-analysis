@@ -1,74 +1,79 @@
-# components/pipeline/data_extraction.py
-
-from components.logger import logger
 import praw
+import pytz
+from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
-from datetime import datetime, timedelta
-import pytz
+from components.logger import logger
+import config
 
-def fetch_reddit_keys_and_username(user_id):
+if not firebase_admin._apps:
+    cred = credentials.Certificate(config.FIREBASE_SERVICE_ACCOUNT)
+    firebase_admin.initialize_app(cred, {'databaseURL': config.FIREBASE_DB_URL})
+
+def fetch_tokens(username: str):
     try:
-        ref = db.reference(f'/reddit_keys/{user_id}')
-        data = ref.get()
-        if data is None:
-            logger.error(f"No data found for user_id: {user_id}")
+        ref = db.reference(f'/reddit_tokens/{username}')
+        tokens = ref.get()
+        if not tokens:
+            logger.error(f"No tokens found in Firebase for username: {username}")
             return None
-        logger.info(f"Fetched Reddit keys and username for user_id: {user_id}")
-        return {
-            'client_id': data['client_id'],
-            'client_secret': data['client_secret'],
-            'user_agent': data['user_agent'],
-            'username': data['username']
-        }
+        return tokens
     except Exception as e:
-        logger.error(f"Error fetching Reddit keys from Firebase: {str(e)}")
+        logger.error(f"Firebase token fetch error for {username}: {e}")
         return None
 
-def extract_recent_user_content(reddit_user, days=10):
+def get_reddit_client(tokens):
+    try:
+        reddit = praw.Reddit(
+            client_id=config.REDDIT_CLIENT_ID,
+            client_secret=config.REDDIT_CLIENT_SECRET,
+            user_agent=config.REDDIT_USER_AGENT,
+            refresh_token=tokens.get('refresh_token'),
+        )
+        logger.info(f"Initialized Reddit client for user: {tokens.get('username')}")
+        return reddit
+    except Exception as e:
+        logger.error(f"Error initializing Reddit client: {e}")
+        return None
+
+def extract_merged_text(username: str, days=10):
+    tokens = fetch_tokens(username)
+    if tokens is None:
+        logger.error("No tokens found, aborting extraction.")
+        return None
+    
+    reddit = get_reddit_client(tokens)
+    if reddit is None:
+        logger.error("Could not init Reddit client, aborting extraction.")
+        return None
+    
+    reddit_user = reddit.redditor(username)
     now = datetime.now(pytz.utc)
     cutoff = now - timedelta(days=days)
-    merged_texts = []
 
+    merged_texts = []
     try:
-        for submission in reddit_user.submissions.new(limit=None):
+        # recent posts
+        for submission in reddit_user.submissions.new(limit=100):
             if datetime.fromtimestamp(submission.created_utc, pytz.utc) < cutoff:
                 continue
-            title = submission.title or ''
-            selftext = submission.selftext or ''
-            comments_text = []
-            for comment in reddit_user.comments.new(limit=None):
-                if comment.link_id.split('_')[-1] == submission.id and \
-                   datetime.fromtimestamp(comment.created_utc, pytz.utc) >= cutoff:
-                    comments_text.append(comment.body)
-            merged = ' '.join([title, selftext] + comments_text)
-            merged_texts.append({
-                'post_id': submission.id,
-                'merged_text': merged
-            })
-        logger.info(f"Extracted and merged text data for user: {reddit_user.name}")
-    except Exception as e:
-        logger.error(f"Failed to extract content for user {reddit_user.name}: {str(e)}")
-    return merged_texts
+            merged_texts.append(f"{submission.title} {submission.selftext}")
+            if len(merged_texts) >= 10:
+                break
+        
+        # recent comments + post info
+        for comment in reddit_user.comments.new(limit=100):
+            if datetime.fromtimestamp(comment.created_utc, pytz.utc) < cutoff:
+                continue
+            submission = comment.submission
+            merged_comments = (f"{comment.body} (On post: {submission.title} {submission.selftext})")
+            merged_texts.append(merged_comments)
+            if len(merged_texts) >= 20:
+                break
 
-# Example main function
-def main(user_id):
-    try:
-        params = fetch_reddit_keys_and_username(user_id)
-        if params is None:
-            logger.warning("Reddit params are None, aborting extraction.")
-            return
-        reddit = praw.Reddit(
-            client_id=params['client_id'],
-            client_secret=params['client_secret'],
-            user_agent=params['user_agent']
-        )
-        reddit_user = reddit.redditor(params['username'])
-        user_text_data = extract_recent_user_content(reddit_user, days=10)
-        # Process further or send to model/backend
-        logger.info(f"Data extraction complete for user: {params['username']}")
+        logger.info(f"Extracted {len(merged_texts)} texts for user {username}")
+        # Merge all to one string for model single text input
+        return [' '.join(merged_texts)]
     except Exception as e:
-        logger.critical(f"Fatal error in main pipeline: {str(e)}")
-
-if __name__ == "__main__":
-    main('USER_ID')  # Replace with actual User ID
+        logger.error(f"Data extraction error: {e}")
+        return None
