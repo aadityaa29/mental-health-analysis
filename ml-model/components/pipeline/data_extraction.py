@@ -22,7 +22,10 @@ def fetch_tokens(username: str):
         logger.error(f"Firebase token fetch error for {username}: {e}")
         return None
 
-def get_reddit_client(tokens):
+def get_reddit_client(username: str):
+    tokens = fetch_tokens(username)
+    if not tokens:
+        return None
     try:
         reddit = praw.Reddit(
             client_id=config.REDDIT_CLIENT_ID,
@@ -30,19 +33,14 @@ def get_reddit_client(tokens):
             user_agent=config.REDDIT_USER_AGENT,
             refresh_token=tokens.get('refresh_token'),
         )
-        logger.info(f"Initialized Reddit client for user: {tokens.get('username')}")
+        logger.info(f"Initialized Reddit client for user: {username}")
         return reddit
     except Exception as e:
         logger.error(f"Error initializing Reddit client: {e}")
         return None
 
 def extract_merged_text(username: str, days=10):
-    tokens = fetch_tokens(username)
-    if tokens is None:
-        logger.error("No tokens found, aborting extraction.")
-        return None
-    
-    reddit = get_reddit_client(tokens)
+    reddit = get_reddit_client(username)
     if reddit is None:
         logger.error("Could not init Reddit client, aborting extraction.")
         return None
@@ -53,27 +51,26 @@ def extract_merged_text(username: str, days=10):
 
     merged_texts = []
     try:
-        # recent posts
+        # Extract recent posts
         for submission in reddit_user.submissions.new(limit=100):
             if datetime.fromtimestamp(submission.created_utc, pytz.utc) < cutoff:
                 continue
-            merged_texts.append(f"{submission.title} {submission.selftext}")
+            merged_texts.append(f"{submission.title} {submission.selftext}".strip())
             if len(merged_texts) >= 10:
                 break
-        
-        # recent comments + post info
+
+        # Extract recent comments with post context
         for comment in reddit_user.comments.new(limit=100):
             if datetime.fromtimestamp(comment.created_utc, pytz.utc) < cutoff:
                 continue
             submission = comment.submission
-            merged_comments = (f"{comment.body} (On post: {submission.title} {submission.selftext})")
+            merged_comments = f"{comment.body} (On post: {submission.title} {submission.selftext})".strip()
             merged_texts.append(merged_comments)
             if len(merged_texts) >= 20:
                 break
 
         logger.info(f"Extracted {len(merged_texts)} texts for user {username}")
-        # Merge all to one string for model single text input
-        return [' '.join(merged_texts)]
+        return merged_texts
     except Exception as e:
         logger.error(f"Data extraction error: {e}")
         return None
