@@ -1,0 +1,4 @@
+[2025-11-07 12:11:18,886] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/mental_health/best_tfidf_logreg.pkl
+[2025-11-07 12:11:19,454] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/mental_health/best_tfidf_vectorizer.pkl
+[2025-11-07 12:11:19,708] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/sentiment_model/model.pkl
+[2025-11-07 12:11:19,748] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/sentiment_model/vectorizer.pkl

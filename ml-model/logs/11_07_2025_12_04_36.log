@@ -1,0 +1,1 @@
+[2025-11-07 12:04:57,521] 15 train_test - ERROR - \u274c Failed pickle load from models/mental_health/best_tfidf_logreg.pkl: invalid load key, '\x07'.

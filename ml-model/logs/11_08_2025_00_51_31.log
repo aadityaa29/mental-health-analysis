@@ -1,0 +1,30 @@
+[2025-11-08 00:52:07,432] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/mental_health/best_tfidf_logreg.pkl
+[2025-11-08 00:52:08,676] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/mental_health/best_tfidf_vectorizer.pkl
+[2025-11-08 00:52:10,237] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/sentiment_model/model.pkl
+[2025-11-08 00:52:10,284] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/sentiment_model/vectorizer.pkl
+[2025-11-08 00:52:13,606] 49 RedditDataLogger - INFO - \U0001f7e2 Received prediction request for Reddit user: Annual-Nobody-2762
+[2025-11-08 00:52:13,606] 30 RedditDataLogger - INFO - \U0001f7e2 Extracting Reddit data for user: Annual-Nobody-2762
+[2025-11-08 00:52:13,695] 19 RedditDataLogger - INFO - \u2705 Reddit client initialized successfully.
+[2025-11-08 00:52:13,696] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 00:52:14,591] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 00:52:15,035] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 00:52:18,703] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 00:52:19,459] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 00:52:23,510] 62 RedditDataLogger - INFO - \u2705 Extracted 5 texts for Annual-Nobody-2762
+[2025-11-08 00:52:23,595] 44 train_test - INFO - \u2705 Predicted 1 samples successfully.
+[2025-11-08 00:52:23,596] 100 RedditDataLogger - INFO - \u2705 Returning prediction response for Annual-Nobody-2762

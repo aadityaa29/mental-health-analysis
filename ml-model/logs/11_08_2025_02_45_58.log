@@ -1,0 +1,39 @@
+[2025-11-08 02:45:59,231] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/mental_health/best_tfidf_logreg.pkl
+[2025-11-08 02:45:59,689] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/mental_health/best_tfidf_vectorizer.pkl
+[2025-11-08 02:46:00,125] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/sentiment_model/model.pkl
+[2025-11-08 02:46:00,157] 10 train_test - INFO - \u2705 Loaded model/vectorizer using joblib from models/sentiment_model/vectorizer.pkl
+[2025-11-08 02:46:07,583] 71 RedditDataLogger - INFO - \U0001f7e2 Received prediction request for UID: M4h6Z2iyW5ZRgNajKuYP8UbyiSf2
+[2025-11-08 02:46:11,552] 88 RedditDataLogger - INFO - \U0001f517 Connected platforms for M4h6Z2iyW5ZRgNajKuYP8UbyiSf2: ['reddit', 'twitter', 'spotify']
+[2025-11-08 02:46:11,553] 18 RedditDataLogger - INFO - \U0001f50d Extracting Reddit data for: Annual-Nobody-2762
+[2025-11-08 02:46:11,553] 30 RedditDataLogger - INFO - \U0001f7e2 Extracting Reddit data for user: Annual-Nobody-2762
+[2025-11-08 02:46:11,555] 19 RedditDataLogger - INFO - \u2705 Reddit client initialized successfully.
+[2025-11-08 02:46:11,556] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 02:46:12,592] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 02:46:13,010] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 02:46:16,013] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 02:46:16,815] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-08 02:46:20,126] 62 RedditDataLogger - INFO - \u2705 Extracted 5 texts for Annual-Nobody-2762
+[2025-11-08 02:46:20,126] 30 RedditDataLogger - INFO - \U0001f50d Extracting Twitter data...
+[2025-11-08 02:46:20,127] 11 RedditDataLogger - ERROR - \U0001f6a8 Missing Twitter access token.
+[2025-11-08 02:46:20,127] 38 RedditDataLogger - INFO - \U0001f50d Extracting Spotify data...
+[2025-11-08 02:46:20,127] 14 RedditDataLogger - INFO - \U0001f7e2 Extracting Spotify listening history...
+[2025-11-08 02:46:20,581] 41 RedditDataLogger - INFO - \u2705 Extracted 50 Spotify tracks.
+[2025-11-08 02:46:20,583] 43 RedditDataLogger - INFO - \u2705 Total merged texts collected: 51
+[2025-11-08 02:46:20,584] 95 RedditDataLogger - INFO - \U0001f4c4 Extracted 51 text samples for M4h6Z2iyW5ZRgNajKuYP8UbyiSf2
+[2025-11-08 02:46:20,766] 44 train_test - INFO - \u2705 Predicted 51 samples successfully.
+[2025-11-08 02:46:20,767] 148 RedditDataLogger - INFO - \u2705 Prediction successfully generated for M4h6Z2iyW5ZRgNajKuYP8UbyiSf2
