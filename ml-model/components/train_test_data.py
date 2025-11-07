@@ -24,17 +24,18 @@ class MetaModelPredictor:
     def predict(self, texts: List[str]):
         try:
             sent_features = self.sent_vec.transform(texts)
-            sent_preds = self.sent_model.predict(sent_features)
+            sent_preds = list(self.sent_model.predict(sent_features))
+            # Binary sentiment: 1=positive, 0=negative (assume your model outputs accordingly, else adjust here)
+            sent_preds = [1 if s == 0 else 0 for s in sent_preds]
 
             mh_preds = []
             for i, text in enumerate(texts):
-                if sent_preds[i] == 0:  # Negative sentiment
+                if sent_preds[i] == 0:
                     mh_features = self.mh_vec.transform([text])
                     pred = self.mh_model.predict(mh_features)[0]
                 else:
-                    pred = None
+                    pred = 5  # 'Normal' category for positive sentiment
                 mh_preds.append(pred)
-
             logger.info(f"Predicted {len(texts)} samples")
             return mh_preds, sent_preds
         except Exception as e:
