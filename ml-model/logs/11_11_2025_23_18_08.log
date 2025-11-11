@@ -1,0 +1,1 @@
+[2025-11-11 23:18:12,932] 23 train_test - ERROR - Failed pickle load from models/mental_health_v2/final_lightgbm.pkl: No module named 'lightgbm'

@@ -1,0 +1,7 @@
+[2025-11-11 22:03:56,211] 11 train_test - INFO - Loaded pickle from models/mental_health/best_tfidf_logreg.pkl
+[2025-11-11 22:03:56,220] 11 train_test - INFO - Loaded pickle from models/mental_health/best_tfidf_vectorizer.pkl
+[2025-11-11 22:03:56,385] 11 train_test - INFO - Loaded pickle from models/sentiment_model/model.pkl
+[2025-11-11 22:03:56,386] 11 train_test - INFO - Loaded pickle from models/sentiment_model/vectorizer.pkl
+[2025-11-11 22:04:04,649] 26 RedditDataLogger - INFO - Received prediction request for user_id: Annual-Nobody-2762
+[2025-11-11 22:04:04,649] 35 RedditDataLogger - ERROR - [TEST MODE] Reddit client initialization failed: module 'components.pipeline.config' has no attribute 'REDDIT_USER_AGENT'
+[2025-11-11 22:04:04,649] 49 RedditDataLogger - WARNING - [TEST MODE] Reddit client unavailable — using mock fallback text.

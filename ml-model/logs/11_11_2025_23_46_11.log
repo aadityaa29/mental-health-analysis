@@ -1,0 +1,5 @@
+[2025-11-11 23:46:13,091] 69 train_test - INFO - ✅ Loaded pickle: models/mental_health_v2/final_lightgbm.pkl
+[2025-11-11 23:46:13,095] 69 train_test - INFO - ✅ Loaded pickle: models/mental_health_v2/tfidf_vectorizer.pkl
+[2025-11-11 23:46:13,096] 69 train_test - INFO - ✅ Loaded pickle: models/mental_health_v2/base_lr_tfidf.pkl
+[2025-11-11 23:46:22,118] 69 train_test - INFO - ✅ Loaded pickle: models/sentiment_model/model.pkl
+[2025-11-11 23:46:22,120] 69 train_test - INFO - ✅ Loaded pickle: models/sentiment_model/vectorizer.pkl
