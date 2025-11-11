@@ -1,0 +1,9 @@
+[2025-11-12 02:28:30,764] 143 train_test - INFO - 🔹 Loading SentenceTransformer: all-MiniLM-L6-v2
+[2025-11-12 02:28:30,779] 219 sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: mps
+[2025-11-12 02:28:30,779] 227 sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+[2025-11-12 02:28:35,255] 146 train_test - INFO - ✅ Hybrid predictor initialized successfully.
+[2025-11-12 02:28:42,936] 60 RedditDataLogger - INFO - 📩 Received request for user_id: Annual-Nobody-2762
+[2025-11-12 02:28:42,936] 35 RedditDataLogger - ERROR - [TEST MODE] Reddit client initialization failed: module 'components.pipeline.config' has no attribute 'REDDIT_USER_AGENT'
+[2025-11-12 02:28:42,936] 49 RedditDataLogger - WARNING - [TEST MODE] Reddit client unavailable — using mock fallback text.
+[2025-11-12 02:28:45,385] 189 train_test - INFO - 🧠 Predicted 4 samples successfully.
+[2025-11-12 02:28:45,386] 117 RedditDataLogger - INFO - ✅ Prediction complete for user_id: Annual-Nobody-2762
