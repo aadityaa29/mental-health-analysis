@@ -1,0 +1,1 @@
+[2025-11-11 23:45:22,222] 72 train_test - ERROR - ❌ Failed to load pickle from models/mental_health_v2/final_lightgbm_re.pkl: invalid load key, '\x02'.

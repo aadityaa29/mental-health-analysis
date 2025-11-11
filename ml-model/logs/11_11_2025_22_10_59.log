@@ -1,0 +1,4 @@
+[2025-11-11 22:11:01,230] 11 train_test - INFO - Loaded pickle from models/mental_health/best_tfidf_logreg.pkl
+[2025-11-11 22:11:01,236] 11 train_test - INFO - Loaded pickle from models/mental_health/best_tfidf_vectorizer.pkl
+[2025-11-11 22:11:01,389] 11 train_test - INFO - Loaded pickle from models/sentiment_model/model.pkl
+[2025-11-11 22:11:01,390] 11 train_test - INFO - Loaded pickle from models/sentiment_model/vectorizer.pkl

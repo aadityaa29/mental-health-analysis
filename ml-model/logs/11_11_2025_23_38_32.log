@@ -1,0 +1,2 @@
+[2025-11-11 23:38:34,564] 64 train_test - WARNING - ⚠️ LightGBM not found — importing dynamically.
+[2025-11-11 23:38:34,564] 72 train_test - ERROR - ❌ Failed to load pickle from models/mental_health_v2/final_lightgbm_re.pkl: No module named 'lightgbm'
