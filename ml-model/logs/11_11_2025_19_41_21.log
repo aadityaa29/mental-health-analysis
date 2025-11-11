@@ -1,0 +1,24 @@
+[2025-11-11 19:41:28,852] 32 train_test - INFO - \U0001f504 Initializing MetaModelPredictor...
+[2025-11-11 19:41:28,867] 21 train_test - WARNING - \u26a0\ufe0f Pickle failed for models/mental_health/best_tfidf_logreg.pkl, trying joblib...
+[2025-11-11 19:41:29,542] 23 train_test - INFO - \u2705 Loaded (joblib): models/mental_health/best_tfidf_logreg.pkl
+[2025-11-11 19:41:29,579] 21 train_test - WARNING - \u26a0\ufe0f Pickle failed for models/mental_health/best_tfidf_vectorizer.pkl, trying joblib...
+[2025-11-11 19:41:30,425] 23 train_test - INFO - \u2705 Loaded (joblib): models/mental_health/best_tfidf_vectorizer.pkl
+[2025-11-11 19:41:32,803] 18 train_test - INFO - \u2705 Loaded (pickle): models/sentiment_model/model.pkl
+[2025-11-11 19:41:32,842] 18 train_test - INFO - \u2705 Loaded (pickle): models/sentiment_model/vectorizer.pkl
+[2025-11-11 19:41:32,843] 37 train_test - INFO - \u2705 All models and vectorizers loaded successfully!
+[2025-11-11 19:42:50,085] 24 RedditDataLogger - INFO - Received prediction request for user_id: Annual-Nobody-2762
+[2025-11-11 19:42:51,089] 23 RedditDataLogger - INFO - \u2705 Reddit client initialized for hardcoded user: Annual-Nobody-2762
+[2025-11-11 19:42:51,090] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-11 19:42:51,794] 56 RedditDataLogger - ERROR - Data extraction error: received 401 HTTP response
+[2025-11-11 19:42:51,794] 28 RedditDataLogger - WARNING - No extracted data for user_id: Annual-Nobody-2762
+[2025-11-11 19:43:57,155] 24 RedditDataLogger - INFO - Received prediction request for user_id: Annual-Nobody-2762
+[2025-11-11 19:43:57,156] 23 RedditDataLogger - INFO - \u2705 Reddit client initialized for hardcoded user: Annual-Nobody-2762
+[2025-11-11 19:43:57,157] 457 praw - WARNING - It appears that you are using PRAW in an asynchronous environment.
+It is strongly recommended to use Async PRAW: https://asyncpraw.readthedocs.io.
+See https://praw.readthedocs.io/en/latest/getting_started/multiple_instances.html#discord-bots-and-asynchronous-environments for more info.
+
+[2025-11-11 19:43:58,047] 56 RedditDataLogger - ERROR - Data extraction error: received 401 HTTP response
+[2025-11-11 19:43:58,047] 28 RedditDataLogger - WARNING - No extracted data for user_id: Annual-Nobody-2762
