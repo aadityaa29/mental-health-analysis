@@ -1,0 +1,9 @@
+[2025-11-12 01:59:32,081] 219 sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: mps
+[2025-11-12 01:59:32,081] 227 sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+[2025-11-12 01:59:39,510] 59 RedditDataLogger - INFO - Received request for user_id: Annual-Nobody-2762
+[2025-11-12 01:59:39,510] 35 RedditDataLogger - ERROR - [TEST MODE] Reddit client initialization failed: module 'components.pipeline.config' has no attribute 'REDDIT_USER_AGENT'
+[2025-11-12 01:59:39,510] 49 RedditDataLogger - WARNING - [TEST MODE] Reddit client unavailable — using mock fallback text.
+[2025-11-12 01:59:41,401] 151 train_test - WARNING - Scaler transform failed: X has 50 features, but StandardScaler is expecting 10 features as input. — using raw dense features.
+[2025-11-12 01:59:42,054] 195 train_test - ERROR - Final model predict failed: X has 20434 features, but LGBMClassifier is expecting 20394 features as input.
+[2025-11-12 01:59:42,067] 200 train_test - ERROR - Fallback predict also failed: X has 20434 features, but LGBMClassifier is expecting 20394 features as input.
+[2025-11-12 01:59:42,067] 73 RedditDataLogger - ERROR - Prediction failed: X has 20434 features, but LGBMClassifier is expecting 20394 features as input.

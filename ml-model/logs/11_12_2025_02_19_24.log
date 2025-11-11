@@ -1,0 +1,4 @@
+[2025-11-12 02:19:24,783] 143 train_test - INFO - 🔹 Loading SentenceTransformer: all-MiniLM-L6-v2
+[2025-11-12 02:19:24,794] 219 sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: mps
+[2025-11-12 02:19:24,794] 227 sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+[2025-11-12 02:19:29,380] 146 train_test - INFO - ✅ Hybrid predictor initialized successfully.

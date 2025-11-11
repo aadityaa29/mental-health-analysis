@@ -1,72 +1,95 @@
 # components/pipeline/data_preprocessing.py
-# -------------------------------------------------------------
-# Text cleaning & preprocessing (consistent with training)
-# -------------------------------------------------------------
+"""
+Text cleaning & preprocessing — matches training pipeline.
+Uses local NLTK dir: ~/nltk_new_data
+"""
 
-import re
 import os
 import ssl
+import re
 import nltk
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
 from nltk import pos_tag, word_tokenize
 
-# Custom NLTK data dir
+# Ensure local nltk folder is used (you already created it previously)
 NLTK_DIR = os.path.expanduser("~/nltk_new_data")
 os.makedirs(NLTK_DIR, exist_ok=True)
 nltk.data.path.append(NLTK_DIR)
 
-# macOS SSL fix
+# macOS SSL fix for downloader (safe no-op if not needed)
 try:
     ssl._create_default_https_context = ssl._create_unverified_context
 except Exception:
     pass
 
-# Ensure corpora
-for pkg in ["stopwords", "punkt", "averaged_perceptron_tagger", "wordnet"]:
+# Ensure required corpora are present (quiet)
+REQUIRED = ["stopwords", "punkt", "averaged_perceptron_tagger", "wordnet"]
+for pkg in REQUIRED:
     try:
-        nltk.data.find(f"corpora/{pkg}")
+        # punkt lives under tokenizers; others under corpora or taggers
+        if pkg == "punkt":
+            nltk.data.find(f"tokenizers/{pkg}")
+        elif pkg == "averaged_perceptron_tagger":
+            nltk.data.find(f"taggers/{pkg}")
+        else:
+            nltk.data.find(f"corpora/{pkg}")
     except LookupError:
-        print(f"📦 Downloading missing: {pkg}")
         nltk.download(pkg, download_dir=NLTK_DIR, quiet=True)
 
-stop_words = set(stopwords.words("english"))
-lem = WordNetLemmatizer()
+STOP_WORDS = set(stopwords.words("english"))
+LEM = WordNetLemmatizer()
 
-# --- Basic cleaner (for sentiment model) ---
-def clean_text(text: str) -> str:
+def basic_clean(text: str) -> str:
+    """Light cleaning used for sentiment pipeline."""
+    if not isinstance(text, str):
+        return ""
     text = text.lower()
     text = re.sub(r"http\S+|www\.\S+", " ", text)
     text = re.sub(r"@\w+", " ", text)
-    text = re.sub(r"[^a-z\s]", " ", text)
+    text = re.sub(r"[^a-z\s]", " ", text)   # only letters + spaces
     text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+def clean_text(text: str) -> str:
+    """Used for sentiment model (keeps simple tokens, removes stopwords)."""
+    text = basic_clean(text)
     tokens = text.split()
-    return " ".join([w for w in tokens if w not in stop_words])
+    filtered = [t for t in tokens if t not in STOP_WORDS]
+    return " ".join(filtered)
 
 def clean_text_batch(texts):
     return [clean_text(t) for t in texts]
 
-# --- Advanced cleaner (for MH model) ---
-def _advanced_clean(text):
+def advanced_clean(text: str) -> str:
+    """Advanced cleaning used for MH model: tokenization, POS-based lemmatization."""
+    if not isinstance(text, str):
+        return ""
     text = text.lower()
     text = re.sub(r"http\S+|www\.\S+", " ", text)
     text = re.sub(r"@\w+", " ", text)
-    text = re.sub(r"[^a-z\s']", " ", text)
+    text = re.sub(r"[^a-z\s']", " ", text)   # keep apostrophes (if you need)
     text = re.sub(r"\s+", " ", text).strip()
+
     tokens = word_tokenize(text)
-    pos_tags = pos_tag(tokens)
-    cleaned = []
-    for word, tag in pos_tags:
-        if word in stop_words:
+    tags = pos_tag(tokens)
+
+    out = []
+    for w, tag in tags:
+        if w in STOP_WORDS:
             continue
-        pos = (
-            wordnet.VERB if tag.startswith("V")
-            else wordnet.NOUN if tag.startswith("N")
-            else wordnet.ADJ if tag.startswith("J")
-            else wordnet.ADV
-        )
-        cleaned.append(lem.lemmatize(word, pos))
-    return " ".join(cleaned)
+        # map tag to wordnet pos
+        if tag.startswith("V"):
+            p = wordnet.VERB
+        elif tag.startswith("N"):
+            p = wordnet.NOUN
+        elif tag.startswith("J"):
+            p = wordnet.ADJ
+        else:
+            p = wordnet.ADV
+        out.append(LEM.lemmatize(w, p))
+
+    return " ".join(out)
 
 def clean_text_batch_v2(texts):
-    return [_advanced_clean(t) for t in texts]
+    return [advanced_clean(t) for t in texts]
