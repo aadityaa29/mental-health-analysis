@@ -1,57 +1,19 @@
-# ======================
-# Node / Next.js
-# ======================
-frontend/neura-sense/node_modules/
-frontend/neura-sense/.next/
-frontend/neura-sense/out/
-frontend/neura-sense/.vercel/
-frontend/neura-sense/dist/
-
-frontend/neura-sense/.env
-frontend/neura-sense/.env.local
-frontend/neura-sense/.env.*.local
-
-# ======================
-# Python / ML model
-# ======================
-ml-model/venv/
-ml-model/.venv/
-ml-model/__pycache__/
-ml-model/.mypy_cache/
-ml-model/.pytest_cache/
-ml-model/.coverage
-ml-model/dist/
-ml-model/build/
-
-# Don't upload big trained models, checkpoints or logs
-ml-model/models/
-ml-model/logs/
-ml-model/notebooks/
-ml-model/*.ckpt
-ml-model/*.pth
-ml-model/*.pt
-ml-model/*.bin
-
-# Secrets / service account
-ml-model/serviceAccountKey.json
-*.pem
-*.key
-
-# ENV files
+# Python
+__pycache__/
+*.pyc
+venv/
 .env
-*.env
-.env.local
-.env.*.local
 
-# OS / editors
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-*.sublime-workspace
-*.sublime-project
+# Firebase keys (do NOT commit)
+serviceAccountKey.json
+
+# Logs
+logs/
 *.log
 
-# package-lock (optional if you want to ignore)
-# frontend/neura-sense/package-lock.json
-
+# Next.js & Node
+node_modules/
+.next/
+.env.local
+.env.development.local
+.env.production.local
