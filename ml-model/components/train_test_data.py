@@ -1,43 +1,135 @@
+# components/train_test_data.py
+# -------------------------------------------------------------
+# 🧠 Mental Health Transformer + Sentiment Predictor (Dual Input Support)
+# -------------------------------------------------------------
+import os
 import pickle
+import joblib
+import numpy as np
 import logging
 from typing import List
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from textblob import TextBlob
 
+# -------------------------------------------------------------
+# Logger Setup
+# -------------------------------------------------------------
 logger = logging.getLogger("train_test")
+logger.setLevel(logging.INFO)
+SIA = SentimentIntensityAnalyzer()
 
+# -------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------
 def load_pickle(path: str):
+    """Try pickle first, then joblib as fallback."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Missing file: {path}")
     try:
-        with open(path, 'rb') as f:
-            obj = pickle.load(f)
-        logger.info(f"Loaded pickle from {path}")
-        return obj
-    except Exception as e:
-        logger.error(f"Failed pickle load from {path}: {e}")
-        raise e
+        with open(path, "rb") as f:
+            return pickle.load(f)
+    except Exception:
+        return joblib.load(path)
+    
+# -------------------------------------------------------------
+# 🧠 Hybrid Predictor (Transformer + Sentiment)
+# -------------------------------------------------------------
 
 class MetaModelPredictor:
-    def __init__(self, mh_model_path, mh_vec_path, sent_model_path, sent_vec_path):
-        self.mh_model = load_pickle(mh_model_path)
-        self.mh_vec = load_pickle(mh_vec_path)
+    def __init__(
+        self,
+        transformer_model_dir: str,
+        sent_model_path: str,
+        sent_vec_path: str,
+        device: str = None,
+    ):
+        # ---- Load Mental Health Transformer ----
+        logger.info(f"🔹 Loading Transformer model from {transformer_model_dir}")
+        self.tokenizer = AutoTokenizer.from_pretrained(transformer_model_dir)
+        self.model = AutoModelForSequenceClassification.from_pretrained(transformer_model_dir)
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
+        self.model.eval()
+
+        # ---- Load Sentiment Model ----
+        logger.info(f"🔹 Loading Sentiment model: {sent_model_path}")
         self.sent_model = load_pickle(sent_model_path)
         self.sent_vec = load_pickle(sent_vec_path)
 
-    def predict(self, texts: List[str]):
-        try:
-            sent_features = self.sent_vec.transform(texts)
-            sent_preds = list(self.sent_model.predict(sent_features))
-            # Binary sentiment: 1=positive, 0=negative (assume your model outputs accordingly, else adjust here)
-            sent_preds = [1 if s == 0 else 0 for s in sent_preds]
+        logger.info("✅ MetaModelPredictor initialized successfully.")
 
-            mh_preds = []
-            for i, text in enumerate(texts):
-                if sent_preds[i] == 0:
-                    mh_features = self.mh_vec.transform([text])
-                    pred = self.mh_model.predict(mh_features)[0]
-                else:
-                    pred = 5  # 'Normal' category for positive sentiment
-                mh_preds.append(pred)
-            logger.info(f"Predicted {len(texts)} samples")
+    # --------------------------
+    # Sentiment prediction (TF-IDF Logistic Regression)
+    # --------------------------
+    def _predict_sentiment(self, texts: List[str]):
+        if not texts:
+            return []
+        sent_feats = self.sent_vec.transform(texts)
+        preds = list(self.sent_model.predict(sent_feats))
+        return preds
+
+    # --------------------------
+    # Mental health transformer prediction
+    # --------------------------
+    def _predict_mental_health(self, texts: List[str]):
+        if not texts:
+            return []
+        all_preds = []
+        batch_size = 8
+        with torch.no_grad():
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i : i + batch_size]
+                enc = self.tokenizer(
+                    batch,
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
+                    max_length=256,
+                )
+                enc = {k: v.to(self.device) for k, v in enc.items()}
+                outputs = self.model(**enc)
+                preds = torch.argmax(outputs.logits, dim=1).cpu().numpy()
+                all_preds.extend(preds)
+        return all_preds
+
+    # --------------------------
+    # Old-style predict() — uses same text for both (backward compatibility)
+    # --------------------------
+    def predict(self, texts: List[str]):
+        """
+        Keeps backward compatibility — uses same input for both models.
+        Use predict_dual() in production.
+        """
+        try:
+            mh_preds = self._predict_mental_health(texts)
+            sent_preds = self._predict_sentiment(texts)
+            logger.info(f"🧠 Predicted {len(texts)} samples successfully (single input).")
             return mh_preds, sent_preds
         except Exception as e:
-            logger.error(f"Prediction error: {e}")
-            raise e
+            logger.error(f"❌ Prediction error: {e}")
+            raise
+
+    # --------------------------
+    # ✅ Dual-input predict() — raw_texts for Transformer, cleaned_texts for Sentiment
+    # --------------------------
+    def predict_dual(self, raw_texts: List[str], clean_texts: List[str]):
+        """
+        raw_texts  → used for Transformer (mental health model)
+        clean_texts → used for Sentiment (TF-IDF + Logistic Regression)
+        """
+        try:
+            mh_preds = self._predict_mental_health(raw_texts)
+            sent_preds = self._predict_sentiment(clean_texts)
+
+            if len(mh_preds) != len(sent_preds):
+                logger.warning("⚠ Mismatch in prediction lengths — aligning to shortest length.")
+                min_len = min(len(mh_preds), len(sent_preds))
+                mh_preds, sent_preds = mh_preds[:min_len], sent_preds[:min_len]
+
+            logger.info(f"✅ Dual prediction successful for {len(mh_preds)} samples.")
+            return mh_preds, sent_preds
+        except Exception as e:
+            logger.error(f"❌ Dual prediction error: {e}")
+            raise

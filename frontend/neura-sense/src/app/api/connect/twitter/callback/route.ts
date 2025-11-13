@@ -1,6 +1,7 @@
+// src/app/api/connect/twitter/callback/route.ts
 import { NextResponse } from "next/server";
 import { TwitterApi } from "twitter-api-v2";
-import { adminDB  } from "@/lib/firebaseAdmin";
+import { adminDB } from "@/lib/firebaseAdmin";
 
 export async function GET(req: Request) {
   try {
@@ -8,22 +9,14 @@ export async function GET(req: Request) {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
 
-    if (!code || !state) {
-      return NextResponse.json({ error: "Missing code or state" }, { status: 400 });
-    }
+    if (!code || !state)
+      return NextResponse.json({ error: "Missing OAuth params" }, { status: 400 });
 
-    // Retrieve the temporary OAuth record
-    const tempRef = adminDB .collection("oauth_temp").doc(state);
-    const tempSnap = await tempRef.get();
+    const tempDoc = await adminDB.collection("oauth_temp").doc(state).get();
+    if (!tempDoc.exists)
+      return NextResponse.json({ error: "Invalid state" }, { status: 400 });
 
-    if (!tempSnap.exists) {
-      return NextResponse.json({ error: "Invalid or expired state" }, { status: 400 });
-    }
-
-    const { codeVerifier, uid } = tempSnap.data() as {
-      codeVerifier: string;
-      uid: string;
-    };
+    const { uid, codeVerifier } = tempDoc.data()!;
 
     const client = new TwitterApi({
       clientId: process.env.TWITTER_CLIENT_ID!,
@@ -32,7 +25,6 @@ export async function GET(req: Request) {
 
     const callbackUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/api/connect/twitter/callback`;
 
-    // Exchange code for access/refresh tokens
     const {
       client: loggedClient,
       accessToken,
@@ -44,36 +36,37 @@ export async function GET(req: Request) {
       redirectUri: callbackUrl,
     });
 
-    // ✅ Fetch Twitter user details (fixed user.fields)
     const me = await loggedClient.v2.me({
-      "user.fields": ["public_metrics", "created_at", "description"],
+      "user.fields": ["created_at", "description", "public_metrics"],
     });
 
-    // Save tokens and user info in Firestore
-    await adminDB 
+    await adminDB
       .collection("users")
       .doc(uid)
       .collection("tokens")
       .doc("twitter")
-      .set({
-        accessToken,
-        refreshToken,
-        expiresAt: Date.now() + expiresIn * 1000,
-        twitterId: me.data.id,
-        username: me.data.username,
-        name: me.data.name,
-        description: me.data.description,
-        metrics: me.data.public_metrics,
-        connectedAt: new Date(),
-      });
+      .set(
+        {
+          accessToken,
+          refreshToken,
+          expiresAt: Date.now() + expiresIn * 1000,
+          twitterId: me.data.id,
+          username: me.data.username,
+          name: me.data.name,
+          description: me.data.description,
+          metrics: me.data.public_metrics,
+          connectedAt: new Date(),
+        },
+        { merge: true }
+      );
 
-    // Cleanup temp state
-    await tempRef.delete();
+    await adminDB.collection("oauth_temp").doc(state).delete();
 
-    // Redirect to dashboard after success
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?twitter=connected`);
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_BASE_URL}/profile-setup?oauth=twitter`
+    );
   } catch (err: any) {
-    console.error("Twitter OAuth callback error:", err);
-    return NextResponse.json({ error: err.message || "OAuth failed" }, { status: 500 });
+    console.error("Twitter callback error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

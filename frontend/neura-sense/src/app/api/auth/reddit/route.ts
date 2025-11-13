@@ -1,5 +1,6 @@
+// src/app/api/auth/reddit/route.ts
 import { NextResponse } from "next/server";
-import { adminAuth, adminDB  } from "@/lib/firebaseAdmin";
+import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import crypto from "crypto";
 
 export async function GET(req: Request) {
@@ -7,31 +8,30 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
 
-    if (!token) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
     const decoded = await adminAuth.verifyIdToken(token);
     const uid = decoded.uid;
 
     const state = crypto.randomUUID();
 
-    await adminDB .collection("oauth_temp").doc(state).set({
+    await adminDB.collection("oauth_temp").doc(state).set({
       uid,
+      provider: "reddit",
       createdAt: new Date(),
     });
 
-    const redditAuthUrl = new URL("https://www.reddit.com/api/v1/authorize");
-    redditAuthUrl.searchParams.set("client_id", process.env.REDDIT_CLIENT_ID!);
-    redditAuthUrl.searchParams.set("response_type", "code");
-    redditAuthUrl.searchParams.set("state", state);
-    redditAuthUrl.searchParams.set("redirect_uri", process.env.REDDIT_REDIRECT_URI!);
-    redditAuthUrl.searchParams.set("duration", "permanent");
-    redditAuthUrl.searchParams.set("scope", "identity read history");
+    const redditUrl = new URL("https://www.reddit.com/api/v1/authorize");
+    redditUrl.searchParams.set("client_id", process.env.REDDIT_CLIENT_ID!);
+    redditUrl.searchParams.set("response_type", "code");
+    redditUrl.searchParams.set("state", state);
+    redditUrl.searchParams.set("redirect_uri", process.env.REDDIT_REDIRECT_URI!);
+    redditUrl.searchParams.set("duration", "permanent");
+    redditUrl.searchParams.set("scope", "identity read history");
 
-    return NextResponse.redirect(redditAuthUrl.toString());
-  } catch (err: any) {
-    console.error("Reddit Auth Error:", err);
-    return NextResponse.json({ error: "Failed to authenticate user" }, { status: 401 });
+    return NextResponse.redirect(redditUrl.toString());
+  } catch (err) {
+    console.error("Reddit Auth error:", err);
+    return NextResponse.json({ error: "Auth failed" }, { status: 500 });
   }
 }

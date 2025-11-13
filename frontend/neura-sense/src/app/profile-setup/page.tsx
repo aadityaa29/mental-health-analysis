@@ -1,90 +1,105 @@
+// src/app/profile-setup/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  Fragment,
+} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import {
-  Button,
-} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import {
-  Github,
-  Twitter,
-  Instagram,
-  Linkedin,
-  Youtube,
-  Loader2,
-  Check,
-  Music,
-  MessageSquare,
-} from "lucide-react";
-import { auth, db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-import { getAuth } from "firebase/auth";
+import { Loader2, Twitter, MessageSquare, Music, Check, X } from "lucide-react";
 
+import { auth, db } from "@/lib/firebase";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  onSnapshot,
+  collection,
+  getDocs,
+  serverTimestamp,
+  deleteDoc,
+} from "firebase/firestore";
+import { onAuthStateChanged, getAuth } from "firebase/auth";
+
+/* -------------------
+   Types
+   ------------------- */
+type ConnectedAccounts = {
+  twitter: boolean;
+  reddit: boolean;
+  spotify: boolean;
+};
+
+type DraftProfile = {
+  name?: string;
+  age?: number | "";
+  gender?: string;
+  city?: string;
+  occupation?: string;
+  preferredTheme?: string;
+  studyPattern?: string;
+  sleepHours?: number | "";
+  exerciseFreq?: string;
+  screenTime?: number | "";
+  stressLevel?: number;
+  waterIntake?: number | "";
+  smokingDrinking?: string;
+  wakeUpTime?: string;
+  bedTime?: string;
+  mood?: number;
+  communicationStyle?: string;
+  interests?: string[];
+  weekendPref?: string;
+  updatedAt?: string | null; // store ISO string for local display
+};
+
+/* -------------------
+   Component
+   ------------------- */
 export default function ProfileSetupPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const search = useSearchParams();
+  // after OAuth redirect we pass ?oauth=reddit or ?oauth=spotify or ?oauth=twitter
+  const oauthProvider = search?.get("oauth") ?? null;
+
+  // auth + loading
+  const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
-// twitter
-   const handleTwitterConnect = async () => {
-      const user = getAuth().currentUser;
-      if (!user) {
-        alert("Please sign in first.");
-        return;
-      }
-  
-      const url = `/api/connect/twitter?uid=${user.uid}`;
-      window.location.href = url; // Redirects to Twitter OAuth
-    };
-// reddit
-    async function connectReddit() {
-  const user = getAuth().currentUser;
-  if (!user) {
-    alert("You must be signed in!");
-    return;
-  }
+  // draft and ref to draft doc
+  const [draft, setDraft] = useState<DraftProfile>({});
+  const draftRef = useRef<any | null>(null);
 
-  const token = await user.getIdToken();
-  window.location.href = `/api/auth/reddit?token=${token}`;
-}
-// spotify
-async function connectSpotify() {
-  const user = getAuth().currentUser;
-  if (!user) {
-    alert("You must be signed in!");
-    return;
-  }
+  // saving indicator + debounce timer
+  const [saving, setSaving] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const token = await user.getIdToken();
-  window.location.href = `/api/auth/spotify?token=${token}`;
-}
+  // unsaved changes tracking
+  const [unsavedChanges, setUnsavedChanges] = useState(false);
 
-  // Basic
-  const [name, setName] = useState("");
-  const [age, setAge] = useState<number | "">("");
-  const [gender, setGender] = useState("");
-  const [city, setCity] = useState("");
-  const [occupation, setOccupation] = useState("");
-  const [preferredTheme, setPreferredTheme] = useState("system");
-  const [studyPattern, setStudyPattern] = useState("");
+  // connected social tokens (reads /users/{uid}/tokens)
+  const [connected, setConnected] = useState<ConnectedAccounts>({
+    twitter: false,
+    reddit: false,
+    spotify: false,
+  });
 
-  // Lifestyle
-  const [sleepHours, setSleepHours] = useState<number | "">("");
-  const [exerciseFreq, setExerciseFreq] = useState("");
-  const [screenTime, setScreenTime] = useState<number | "">("");
-  const [stressLevel, setStressLevel] = useState<number>(5);
-  const [waterIntake, setWaterIntake] = useState<number | "">("");
-  const [smokingDrinking, setSmokingDrinking] = useState("");
-  const [wakeUpTime, setWakeUpTime] = useState("");
-  const [bedTime, setBedTime] = useState("");
+  // step UI (1..4)
+  const [step, setStep] = useState<number>(1);
 
-  // Personality & Interests
+  // interest input
+  const [interestInput, setInterestInput] = useState("");
+
+  // mood options
   const moodOptions = [
     { id: 1, emoji: "😞", label: "Very Low" },
     { id: 2, emoji: "😕", label: "Low" },
@@ -97,136 +112,374 @@ async function connectSpotify() {
     { id: 9, emoji: "🤗", label: "Loved" },
     { id: 10, emoji: "😍", label: "Excellent" },
   ];
-  const [mood, setMood] = useState<number>(6);
-  const [communicationStyle, setCommunicationStyle] = useState("");
-  const [interests, setInterests] = useState<string[]>([]);
-  const [interestInput, setInterestInput] = useState("");
-  const [weekendPref, setWeekendPref] = useState("");
 
-  // Socials / presence
-  const [connected, setConnected] = useState<{ [k: string]: boolean }>({
-    twitter: false,
-    instagram: false,
-    linkedin: false,
-    github: false,
-    youtube: false,
-    website: false,
-    discord: false,
-    reddit: false,
-  });
-
-  const [linkedInUrl, setLinkedInUrl] = useState("");
-  const [githubUrl, setGithubUrl] = useState("");
-  const [websiteUrl, setWebsiteUrl] = useState("");
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [discordHandle, setDiscordHandle] = useState("");
-  const [redditHandle, setRedditHandle] = useState("");
-
-  
-  // Step / progress
-  const [step, setStep] = useState(1);
-
-  // Check auth + redirect if profile exists omitted for brevity (keep similar to your original flow)
+  /* -------------------
+     Auth + load draft + tokens
+     ------------------- */
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
-      if (!currentUser) {
+    const unsubAuth = onAuthStateChanged(auth, async (u) => {
+      if (!u) {
         router.push("/login");
         return;
       }
-      setUser(currentUser);
+      setUser(u);
+
+      // setup draft doc reference
+      const dRef = doc(db, "profiles", u.uid, "draft", "info");
+      draftRef.current = dRef;
+
+      // realtime sync draft
+      const unsubDraft = onSnapshot(dRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data() as any;
+          // If Firestore stores updatedAt as a Timestamp, convert to ISO string for UI:
+          const updatedAt: any = data?.updatedAt;
+          const updatedAtIso =
+            updatedAt && typeof updatedAt.toDate === "function"
+              ? updatedAt.toDate().toISOString()
+              : updatedAt || null;
+
+          setDraft((prev) => ({
+            ...prev,
+            ...data,
+            updatedAt: updatedAtIso,
+          }));
+          // when server-snapshot arrives, treat as saved
+          setUnsavedChanges(false);
+          setSaving(false);
+        } else {
+          // keep current local draft (no server draft yet)
+          setDraft((prev) => ({ ...prev }));
+        }
+      });
+
+      // load tokens once (not realtime)
+      const tokensCol = collection(db, "users", u.uid, "tokens");
+      const loadTokens = async () => {
+        try {
+          const docs = await getDocs(tokensCol);
+          const present: ConnectedAccounts = {
+            twitter: false,
+            reddit: false,
+            spotify: false,
+          };
+          docs.forEach((d) => {
+            const id = d.id.toLowerCase();
+            if (id.includes("reddit")) present.reddit = true;
+            if (id.includes("twitter")) present.twitter = true;
+            if (id.includes("spotify")) present.spotify = true;
+          });
+          setConnected(present);
+        } catch (err) {
+          console.warn("Failed to load tokens", err);
+        }
+      };
+      loadTokens();
+
+      return () => {
+        unsubDraft();
+      };
     });
-    return () => unsub();
+
+    return () => unsubAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  // interests helpers
-  const addInterest = (tag?: string) => {
-    const val = (tag ?? interestInput).trim();
-    if (!val) return;
-    if (!interests.includes(val)) setInterests((p) => [...p, val]);
-    setInterestInput("");
-  };
-  const removeInterest = (tag: string) => {
-    setInterests((p) => p.filter((t) => t !== tag));
+  /* -------------------
+     Auto-save helpers
+     ------------------- */
+  const scheduleAutoSave = useCallback(
+    (field: string, value: any) => {
+      if (!user) {
+        // still update local only
+        setDraft((d) => ({ ...d, [field]: value }));
+        setUnsavedChanges(true);
+        return;
+      }
+
+      // update local draft quickly
+      setDraft((d: any) => ({ ...d, [field]: value }));
+      setUnsavedChanges(true);
+
+      // debounce writes
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
+
+      saveTimer.current = setTimeout(async () => {
+        try {
+          setSaving(true);
+          const dRef = doc(db, "profiles", user.uid, "draft", "info");
+          // write the single changed field and a server timestamp (merge)
+          await setDoc(
+            dRef,
+            { [field]: value, updatedAt: serverTimestamp() },
+            { merge: true }
+          );
+          // local immediate reflection: use local Date ISO for quicker UI update
+          const nowIso = new Date().toISOString();
+          setDraft((d) => ({ ...d, updatedAt: nowIso }));
+          setUnsavedChanges(false);
+          setSaving(false);
+          // toast with readable local time
+          toast.success(`Draft saved · ${new Date(nowIso).toLocaleString()}`, {
+            id: `draft-saved-${nowIso}`,
+          });
+        } catch (err) {
+          console.error("Auto-save failed", err);
+          setSaving(false);
+          setUnsavedChanges(true);
+          toast.error("Auto-save failed");
+        }
+      }, 800);
+    },
+    [user]
+  );
+
+  // immediate full save (used before redirecting to OAuth or finalizing)
+  const saveDraftNow = useCallback(async (): Promise<boolean> => {
+    if (!user) {
+      toast.error("Not signed in");
+      return false;
+    }
+    try {
+      setSaving(true);
+      const dRef = doc(db, "profiles", user.uid, "draft", "info");
+      // write entire draft state
+      await setDoc(dRef, { ...(draft || {}), updatedAt: serverTimestamp() }, { merge: true });
+      // set local updatedAt quickly
+      const nowIso = new Date().toISOString();
+      setDraft((d) => ({ ...d, updatedAt: nowIso }));
+      setUnsavedChanges(false);
+      setSaving(false);
+      toast.success(`Draft saved · ${new Date(nowIso).toLocaleString()}`);
+      return true;
+    } catch (err) {
+      console.error("Failed to save draft", err);
+      setSaving(false);
+      setUnsavedChanges(true);
+      toast.error("Could not save your progress. Try again.");
+      return false;
+    }
+  }, [user, draft]);
+
+  // field change helper typed
+  const handleFieldChange = (field: keyof DraftProfile, value: any) => {
+    scheduleAutoSave(field as string, value);
   };
 
-  // mock connect handler (replace with OAuth flows later)
-  const handleConnect = (platform: string) => {
+  /* -------------------
+     OAuth connect handlers (save draft first, then confirm)
+     ------------------- */
+
+  // state for OAuth-confirm modal
+  const [oauthConfirm, setOauthConfirm] = useState<{
+    provider: "reddit" | "spotify" | "twitter" | null;
+    open: boolean;
+  }>({ provider: null, open: false });
+
+  // state for post-OAuth modal
+  const [postOauthModal, setPostOauthModal] = useState<{
+    provider: string | null;
+    open: boolean;
+  }>({ provider: null, open: false });
+
+  const startOauthFlow = async (provider: "reddit" | "spotify" | "twitter") => {
+    // Save draft then open confirm modal (so user can cancel)
     setLoading(true);
-    setTimeout(() => {
-      setConnected((p) => ({ ...p, [platform]: true }));
-      // also set some sample url if available
-      if (platform === "linkedin") setLinkedInUrl("https://linkedin.com/in/username");
-      if (platform === "github") setGithubUrl("https://github.com/username");
-      setLoading(false);
-      toast.success(`${platform[0].toUpperCase() + platform.slice(1)} connected`);
-    }, 700);
+    const ok = await saveDraftNow();
+    setLoading(false);
+    if (!ok) return;
+    // open confirm modal
+    setOauthConfirm({ provider, open: true });
   };
 
-  const atLeastOneConnected = Object.values(connected).some((v) => v === true);
-
-  const handleSave = async () => {
-    if (!user) return;
-    if (!atLeastOneConnected) {
-      toast.error("Please connect at least one social account for analysis.");
+  const confirmOauthRedirect = async () => {
+    const provider = oauthConfirm.provider;
+    if (!provider || !user) {
+      setOauthConfirm({ provider: null, open: false });
       return;
     }
 
+    setOauthConfirm({ provider: null, open: false });
     setLoading(true);
     try {
-      // prepare payload with defaults for optional fields
-      const profileData: any = {
-        name: name || "Not provided",
-        age: age === "" ? null : Number(age),
-        gender: gender || "Not provided",
-        city: city || "Not provided",
-        occupation: occupation || "Not provided",
-        preferredTheme: preferredTheme || "system",
-        studyPattern: studyPattern || "Not provided",
+      const currentUser = getAuth().currentUser;
+      if (!currentUser) throw new Error("Not authenticated");
 
-        sleepHours: sleepHours === "" ? null : Number(sleepHours),
-        exerciseFreq: exerciseFreq || "Not provided",
-        screenTime: screenTime === "" ? null : Number(screenTime),
-        stressLevel: stressLevel || 5,
-        waterIntake: waterIntake === "" ? null : Number(waterIntake),
-        smokingDrinking: smokingDrinking || "Not provided",
-        wakeUpTime: wakeUpTime || "Not provided",
-        bedTime: bedTime || "Not provided",
+      const token = await currentUser.getIdToken();
 
-        mood,
-        communicationStyle: communicationStyle || "Not provided",
-        interests: interests.length ? interests : ["Not provided"],
-        weekendPref: weekendPref || "Not provided",
+      if (provider === "reddit") {
+        window.location.href = `/api/auth/reddit?token=${token}`;
+      } else if (provider === "spotify") {
+        window.location.href = `/api/auth/spotify?token=${token}`;
+      } else if (provider === "twitter") {
+        // your Twitter route expects uid param in your implementation
+        window.location.href = `/api/connect/twitter?uid=${currentUser.uid}`;
+      }
+    } catch (err) {
+      console.error("OAuth redirect failed", err);
+      toast.error("Failed to start OAuth.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        connectedAccounts: connected,
-        socialProfiles: {
-          linkedin: linkedInUrl || "Not provided",
-          github: githubUrl || "Not provided",
-          website: websiteUrl || "Not provided",
-          youtube: youtubeUrl || "Not provided",
-          discord: discordHandle || "Not provided",
-          reddit: redditHandle || "Not provided",
-        },
+  /* -------------------
+     Post-OAuth handling (user returned from provider)
+     - Show toast + modal asking to connect more or continue
+     ------------------- */
+  useEffect(() => {
+    // If oauthProvider param exists we re-check tokens and show post-OAuth modal
+    if (!user || !oauthProvider) return;
 
-        createdAt: new Date(),
+    (async () => {
+      try {
+        const tokensSnapshot = await getDocs(collection(db, "users", user.uid, "tokens"));
+        const present: ConnectedAccounts = { twitter: false, reddit: false, spotify: false };
+        tokensSnapshot.forEach((d) => {
+          const id = d.id.toLowerCase();
+          if (id.includes("reddit")) present.reddit = true;
+          if (id.includes("twitter")) present.twitter = true;
+          if (id.includes("spotify")) present.spotify = true;
+        });
+        setConnected(present);
+
+        // show toast if newly connected
+        toast.success(`${oauthProvider} connected!`);
+
+        // open small modal asking next steps
+        setPostOauthModal({ provider: oauthProvider, open: true });
+      } catch (err) {
+        console.warn("Could not refresh tokens after OAuth", err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oauthProvider, user]);
+
+  const postOauthChoice = (choice: "more" | "dashboard") => {
+    setPostOauthModal({ provider: null, open: false });
+    if (choice === "dashboard") {
+      router.push("/dashboard");
+    } else {
+      // stay on step 4 for more connections
+      setStep(4);
+    }
+  };
+
+  /* -------------------
+     Disconnect handler
+     - deletes /users/{uid}/tokens/{providerDoc}
+     ------------------- */
+  const handleDisconnect = async (providerKey: string) => {
+    if (!user) return;
+    try {
+      // delete doc under /users/{uid}/tokens/{providerKey}
+      await deleteDoc(doc(db, "users", user.uid, "tokens", providerKey));
+      // reload tokens
+      const docs = await getDocs(collection(db, "users", user.uid, "tokens"));
+      const present: ConnectedAccounts = { twitter: false, reddit: false, spotify: false };
+      docs.forEach((d) => {
+        const id = d.id.toLowerCase();
+        if (id.includes("reddit")) present.reddit = true;
+        if (id.includes("twitter")) present.twitter = true;
+        if (id.includes("spotify")) present.spotify = true;
+      });
+      setConnected(present);
+      toast.success(`${providerKey} disconnected`);
+    } catch (err) {
+      console.warn("Failed to disconnect", err);
+      toast.error("Failed to disconnect");
+    }
+  };
+
+  /* -------------------
+     finalize profile (draft -> profiles + mirror to users)
+     ------------------- */
+  const handleSaveAndContinue = async () => {
+    if (!user) return;
+    const atLeastOneConnected = Object.values(connected).some(Boolean);
+    if (!atLeastOneConnected) {
+      toast.error("Please connect at least one social account before continuing.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const profileRef = doc(db, "profiles", user.uid);
+      const draftRefLocal = doc(db, "profiles", user.uid, "draft", "info");
+      const snap = await getDoc(draftRefLocal);
+      if (!snap.exists()) {
+        toast.error("No profile data to save.");
+        setLoading(false);
+        return;
+      }
+      const data = snap.data() || {};
+
+      // write finalized profile
+      await setDoc(profileRef, { ...data, finalizedAt: serverTimestamp() }, { merge: true });
+
+      // mirror light summary to /users/{uid}
+      const userRef = doc(db, "users", user.uid);
+      const mirror = {
+        profileName: data.name || user.displayName || null,
+        moodLevel: data.mood || null,
+        sleepHours: data.sleepHours || null,
+        lastProfileSaved: serverTimestamp(),
       };
+      await setDoc(userRef, mirror, { merge: true });
 
-      await setDoc(doc(db, "profiles", user.uid), profileData);
       toast.success("Profile saved. Redirecting to dashboard...");
       router.push("/dashboard");
     } catch (err) {
-      console.error(err);
+      console.error("Failed to finalize profile", err);
       toast.error("Failed to save profile. Try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  /* -------------------
+     interests helpers
+     ------------------- */
+  const addInterest = () => {
+    const v = (interestInput || "").trim();
+    if (!v) return;
+    const next = Array.from(new Set([...(draft.interests || []), v]));
+    handleFieldChange("interests", next);
+    setInterestInput("");
+  };
+
+  const removeInterest = (t: string) => {
+    const next = (draft.interests || []).filter((x: string) => x !== t);
+    handleFieldChange("interests", next);
+  };
+
+  const atLeastOneConnected = Object.values(connected).some(Boolean);
+
+  /* -------------------
+     BEFOREUNLOAD handler (browser unload only)
+     Show confirmation only if unsavedChanges is true
+     ------------------- */
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!unsavedChanges) return;
+      e.preventDefault();
+      e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [unsavedChanges]);
+
+  /* -------------------
+     Render UI
+     ------------------- */
   return (
     <main className="min-h-screen bg-gradient-to-b from-indigo-50 to-white flex items-start justify-center py-12 px-4 font-sans">
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.45 }}
         className="w-full max-w-4xl"
       >
         <Card className="rounded-2xl shadow-xl border border-indigo-100 overflow-hidden">
@@ -240,7 +493,7 @@ async function connectSpotify() {
               <div className="text-right">
                 <div className="text-xs text-gray-500">Step</div>
                 <div className="mt-1 inline-flex items-center gap-3">
-                  <div className="px-3 py-1 rounded-full text-sm bg-indigo-600 text-white">{step}/3</div>
+                  <div className="px-3 py-1 rounded-full text-sm bg-indigo-600 text-white">{step}/4</div>
                   <div className="text-xs text-gray-500">Progress</div>
                 </div>
               </div>
@@ -248,24 +501,38 @@ async function connectSpotify() {
           </div>
 
           <CardContent className="p-6">
-            {/* Step content toggling */}
+            {/* --- STEP 1: Basic Info --- */}
             {step === 1 && (
               <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic information</h3>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="name">Full name</Label>
-                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your full name" />
+                    <Label>Full name</Label>
+                    <Input
+                      value={draft.name ?? ""}
+                      onChange={(e) => handleFieldChange("name", e.target.value)}
+                      placeholder="Your full name"
+                    />
                   </div>
 
                   <div>
-                    <Label htmlFor="age">Age</Label>
-                    <Input id="age" type="number" value={age} onChange={(e) => setAge(e.target.value === "" ? "" : Number(e.target.value))} placeholder="e.g. 20" />
+                    <Label>Age</Label>
+                    <Input
+                      type="number"
+                      value={draft.age ?? ""}
+                      onChange={(e) => handleFieldChange("age", e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="e.g. 20"
+                    />
                   </div>
 
                   <div>
-                    <Label htmlFor="gender">Gender</Label>
-                    <select id="gender" value={gender} onChange={(e) => setGender(e.target.value)} className="w-full border rounded-lg p-2">
+                    <Label>Gender</Label>
+                    <select
+                      value={draft.gender ?? ""}
+                      onChange={(e) => handleFieldChange("gender", e.target.value)}
+                      className="w-full border rounded-lg p-2"
+                    >
                       <option value="">Select</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
@@ -275,18 +542,26 @@ async function connectSpotify() {
                   </div>
 
                   <div>
-                    <Label htmlFor="city">Location / City</Label>
-                    <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+                    <Label>Location / City</Label>
+                    <Input value={draft.city ?? ""} onChange={(e) => handleFieldChange("city", e.target.value)} placeholder="City" />
                   </div>
 
                   <div>
-                    <Label htmlFor="occupation">Occupation / Profession</Label>
-                    <Input id="occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} placeholder="e.g. Student / Developer" />
+                    <Label>Occupation / Profession</Label>
+                    <Input
+                      value={draft.occupation ?? ""}
+                      onChange={(e) => handleFieldChange("occupation", e.target.value)}
+                      placeholder="e.g. Student / Developer"
+                    />
                   </div>
 
                   <div>
-                    <Label htmlFor="studyPattern">Study Routine Pattern</Label>
-                    <select id="studyPattern" value={studyPattern} onChange={(e) => setStudyPattern(e.target.value)} className="w-full border rounded-lg p-2">
+                    <Label>Study Routine Pattern</Label>
+                    <select
+                      value={draft.studyPattern ?? ""}
+                      onChange={(e) => handleFieldChange("studyPattern", e.target.value)}
+                      className="w-full border rounded-lg p-2"
+                    >
                       <option value="">Select</option>
                       <option value="morning">Morning</option>
                       <option value="night">Night</option>
@@ -297,38 +572,55 @@ async function connectSpotify() {
                   <div>
                     <Label>Preferred Theme</Label>
                     <div className="flex gap-2 mt-1">
-                      <label className={`px-3 py-1 rounded-lg border ${preferredTheme === 'light' ? 'bg-white ring-2 ring-indigo-200' : 'bg-transparent'}`}>
-                        <input type="radio" name="theme" value="light" checked={preferredTheme === 'light'} onChange={() => setPreferredTheme('light')} className="hidden" /> Light
-                      </label>
-                      <label className={`px-3 py-1 rounded-lg border ${preferredTheme === 'dark' ? 'bg-black text-white ring-2 ring-indigo-200' : 'bg-transparent'}`}>
-                        <input type="radio" name="theme" value="dark" checked={preferredTheme === 'dark'} onChange={() => setPreferredTheme('dark')} className="hidden" /> Dark
-                      </label>
-                      <label className={`px-3 py-1 rounded-lg border ${preferredTheme === 'system' ? 'bg-indigo-50 ring-2 ring-indigo-200' : 'bg-transparent'}`}>
-                        <input type="radio" name="theme" value="system" checked={preferredTheme === 'system'} onChange={() => setPreferredTheme('system')} className="hidden" /> System
-                      </label>
+                      <button
+                        onClick={() => handleFieldChange("preferredTheme", "light")}
+                        className={`px-3 py-1 rounded-lg border ${draft.preferredTheme === "light" ? "bg-white ring-2 ring-indigo-200" : "bg-transparent"}`}
+                      >
+                        Light
+                      </button>
+                      <button
+                        onClick={() => handleFieldChange("preferredTheme", "dark")}
+                        className={`px-3 py-1 rounded-lg border ${draft.preferredTheme === "dark" ? "bg-black text-white ring-2 ring-indigo-200" : "bg-transparent"}`}
+                      >
+                        Dark
+                      </button>
+                      <button
+                        onClick={() => handleFieldChange("preferredTheme", "system")}
+                        className={`px-3 py-1 rounded-lg border ${(!draft.preferredTheme || draft.preferredTheme === "system") ? "bg-indigo-50 ring-2 ring-indigo-200" : "bg-transparent"}`}
+                      >
+                        System
+                      </button>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex justify-between mt-6">
                   <div />
-                  <Button onClick={() => setStep(2)} className="bg-indigo-600 hover:bg-indigo-700 text-white">Next</Button>
+                  <Button onClick={() => setStep(2)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                    Next
+                  </Button>
                 </div>
               </motion.section>
             )}
 
+            {/* --- STEP 2: Health & habits --- */}
             {step === 2 && (
               <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Health & daily habits</h3>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label>Average sleep (hrs)</Label>
-                    <Input value={sleepHours} onChange={(e) => setSleepHours(e.target.value === "" ? "" : Number(e.target.value))} placeholder="e.g. 7" />
+                    <Input
+                      value={draft.sleepHours ?? ""}
+                      onChange={(e) => handleFieldChange("sleepHours", e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="e.g. 7"
+                    />
                   </div>
 
                   <div>
                     <Label>Exercise frequency</Label>
-                    <select value={exerciseFreq} onChange={(e) => setExerciseFreq(e.target.value)} className="w-full border rounded-lg p-2">
+                    <select value={draft.exerciseFreq ?? ""} onChange={(e) => handleFieldChange("exerciseFreq", e.target.value)} className="w-full border rounded-lg p-2">
                       <option value="">Select</option>
                       <option value="daily">Daily</option>
                       <option value="3-4">3-4 times/week</option>
@@ -339,25 +631,40 @@ async function connectSpotify() {
 
                   <div>
                     <Label>Average screen time (hrs/day)</Label>
-                    <Input value={screenTime} onChange={(e) => setScreenTime(e.target.value === "" ? "" : Number(e.target.value))} placeholder="e.g. 6" />
+                    <Input
+                      value={draft.screenTime ?? ""}
+                      onChange={(e) => handleFieldChange("screenTime", e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="e.g. 6"
+                    />
                   </div>
 
                   <div>
                     <Label>Stress level</Label>
                     <div className="mt-2 flex items-center gap-3">
-                      <input type="range" min={1} max={10} value={stressLevel} onChange={(e) => setStressLevel(Number(e.target.value))} className="w-full" />
-                      <div className="w-12 text-sm text-gray-700">{stressLevel}</div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={10}
+                        value={draft.stressLevel ?? 5}
+                        onChange={(e) => handleFieldChange("stressLevel", Number(e.target.value))}
+                        className="w-full"
+                      />
+                      <div className="w-12 text-sm text-gray-700">{draft.stressLevel ?? 5}</div>
                     </div>
                   </div>
 
                   <div>
                     <Label>Water intake (liters/day)</Label>
-                    <Input value={waterIntake} onChange={(e) => setWaterIntake(e.target.value === "" ? "" : Number(e.target.value))} placeholder="e.g. 2" />
+                    <Input
+                      value={draft.waterIntake ?? ""}
+                      onChange={(e) => handleFieldChange("waterIntake", e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="e.g. 2"
+                    />
                   </div>
 
                   <div>
                     <Label>Smoking / Drinking</Label>
-                    <select value={smokingDrinking} onChange={(e) => setSmokingDrinking(e.target.value)} className="w-full border rounded-lg p-2">
+                    <select value={draft.smokingDrinking ?? ""} onChange={(e) => handleFieldChange("smokingDrinking", e.target.value)} className="w-full border rounded-lg p-2">
                       <option value="">Select</option>
                       <option value="none">None</option>
                       <option value="occasionally">Occasionally</option>
@@ -367,22 +674,27 @@ async function connectSpotify() {
 
                   <div>
                     <Label>Wake-up time</Label>
-                    <Input type="time" value={wakeUpTime} onChange={(e) => setWakeUpTime(e.target.value)} />
+                    <Input type="time" value={draft.wakeUpTime ?? ""} onChange={(e) => handleFieldChange("wakeUpTime", e.target.value)} />
                   </div>
 
                   <div>
                     <Label>Bedtime</Label>
-                    <Input type="time" value={bedTime} onChange={(e) => setBedTime(e.target.value)} />
+                    <Input type="time" value={draft.bedTime ?? ""} onChange={(e) => handleFieldChange("bedTime", e.target.value)} />
                   </div>
                 </div>
 
                 <div className="flex justify-between mt-6">
-                  <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-                  <Button onClick={() => setStep(3)} className="bg-indigo-600 hover:bg-indigo-700 text-white">Next</Button>
+                  <Button variant="outline" onClick={() => setStep(1)}>
+                    Back
+                  </Button>
+                  <Button onClick={() => setStep(3)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                    Next
+                  </Button>
                 </div>
               </motion.section>
             )}
 
+            {/* --- STEP 3: Personality & Interests --- */}
             {step === 3 && (
               <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Personality, interests & socials</h3>
@@ -392,17 +704,22 @@ async function connectSpotify() {
                     <Label>Current mood</Label>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {moodOptions.map((m) => (
-                        <button key={m.id} onClick={() => setMood(m.id)} className={`p-2 rounded-xl border ${mood === m.id ? 'ring-2 ring-indigo-200 bg-indigo-50' : 'bg-white'}`} title={m.label}>
+                        <button
+                          key={m.id}
+                          onClick={() => handleFieldChange("mood", m.id)}
+                          className={`p-2 rounded-xl border ${draft.mood === m.id ? "ring-2 ring-indigo-200 bg-indigo-50" : "bg-white"}`}
+                          title={m.label}
+                        >
                           <div className="text-xl">{m.emoji}</div>
                         </button>
                       ))}
                     </div>
-                    <div className="text-sm text-gray-500 mt-2">Selected: {moodOptions.find(o => o.id === mood)?.label}</div>
+                    <div className="text-sm text-gray-500 mt-2">Selected: {moodOptions.find((o) => o.id === draft.mood)?.label ?? "—"}</div>
                   </div>
 
                   <div>
                     <Label>Communication style</Label>
-                    <select value={communicationStyle} onChange={(e) => setCommunicationStyle(e.target.value)} className="w-full border rounded-lg p-2">
+                    <select value={draft.communicationStyle ?? ""} onChange={(e) => handleFieldChange("communicationStyle", e.target.value)} className="w-full border rounded-lg p-2">
                       <option value="">Select</option>
                       <option value="calm">Calm</option>
                       <option value="energetic">Energetic</option>
@@ -415,13 +732,22 @@ async function connectSpotify() {
                   <div className="md:col-span-2">
                     <Label>Interests / Hobbies</Label>
                     <div className="flex gap-2 mt-2">
-                      <Input value={interestInput} onChange={(e) => setInterestInput(e.target.value)} placeholder="Type and press Enter" onKeyDown={(e) => {
-                        if (e.key === 'Enter') { e.preventDefault(); addInterest(); }
-                      }} />
-                      <Button onClick={() => addInterest()} className="px-4">Add</Button>
+                      <Input
+                        value={interestInput}
+                        onChange={(e) => setInterestInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addInterest();
+                          }
+                        }}
+                        placeholder="Type and press Enter"
+                      />
+                      <Button onClick={addInterest}>Add</Button>
                     </div>
+
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {interests.map((t) => (
+                      {(draft.interests || []).map((t: string) => (
                         <div key={t} className="px-3 py-1 rounded-full bg-indigo-50 text-sm inline-flex items-center gap-2">
                           <span>{t}</span>
                           <button onClick={() => removeInterest(t)} className="text-xs">✕</button>
@@ -432,7 +758,7 @@ async function connectSpotify() {
 
                   <div>
                     <Label>Weekend activity preference</Label>
-                    <select value={weekendPref} onChange={(e) => setWeekendPref(e.target.value)} className="w-full border rounded-lg p-2">
+                    <select value={draft.weekendPref ?? ""} onChange={(e) => handleFieldChange("weekendPref", e.target.value)} className="w-full border rounded-lg p-2">
                       <option value="">Select</option>
                       <option value="relaxing">Relaxing</option>
                       <option value="socializing">Socializing</option>
@@ -441,130 +767,146 @@ async function connectSpotify() {
                       <option value="studying">Studying</option>
                     </select>
                   </div>
+                </div>
 
-                  <div className="md:col-span-2">
-                    <Label>Connect social media (connect at least one)</Label>
-                    <p className="text-xs text-gray-500">Connecting allows deeper analysis and activity insights. You can connect more later.</p>
-                    <div className="flex flex-wrap gap-3 mt-3">
-                      {/* Twitter */}
-                <Button
-                  variant="outline"
-                  disabled={loading || connected.twitter}
-                  onClick={handleTwitterConnect}
-                >
-                  {connected.twitter ? (
-                    <>
-                      <Twitter className="mr-2 text-sky-500" /> Connected
-                    </>
-                  ) : (
-                    <>
-                      <Twitter className="mr-2 text-sky-500" /> Connect Twitter
-                    </>
-                  )}
-                </Button>
-  {/* Spotify */}
-                <Button
-                  variant="outline"
-                  disabled={loading || connected.spotify}
-                  onClick={connectSpotify}
-                >
-                  {connected.spotify ? (
-                    <>
-                      <Music className="mr-2 text-green-500" /> Connected
-                    </>
-                  ) : (
-                    <>
-                      <Music className="mr-2 text-green-500" /> Connect Spotify
-                    </>
-                  )}
-                </Button>
+                <div className="flex justify-between mt-6 items-center">
+                  <div className="text-sm text-gray-500">
+                    {saving ? (
+                      <span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" /> Saving draft...</span>
+                    ) : (
+                      <span>Draft {draft.updatedAt ? `saved · ${new Date(draft.updatedAt).toLocaleString()}` : "(auto-save)"}</span>
+                    )}
+                  </div>
 
-{/* reddit */}
-                      <Button
-                  variant="outline"
-                  disabled={loading || connected.reddit}
-                  onClick={connectReddit}
-                >
-                  {connected.reddit ? (
-                    <>
-                      <MessageSquare className="mr-2 text-orange-500" /> Connected
-                    </>
-                  ) : (
-                    <>
-                      <MessageSquare className="mr-2 text-orange-500" /> Connect
-                      Reddit
-                    </>
-                  )}
-                </Button>
-
-                      {/* <Button variant={connected.instagram ? 'secondary' : 'outline'} disabled={connected.instagram || loading} onClick={() => handleConnect('instagram')}>
-                        <Instagram className="mr-2" /> {connected.instagram ? 'Connected' : 'Connect Instagram'} {connected.instagram && <Check className="ml-2" />}
-                      </Button> */}
-
-                      {/* <Button variant={connected.linkedin ? 'secondary' : 'outline'} disabled={connected.linkedin || loading} onClick={() => handleConnect('linkedin')}>
-                        <Linkedin className="mr-2" /> {connected.linkedin ? 'Connected' : 'Connect LinkedIn'} {connected.linkedin && <Check className="ml-2" />}
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
+                    <div className="flex gap-2">
+                      <Button onClick={() => setStep(4)} className="bg-indigo-600 hover:bg-indigo-700 text-white" disabled={loading}>
+                        Continue to Socials
                       </Button>
-
-                      <Button variant={connected.github ? 'secondary' : 'outline'} disabled={connected.github || loading} onClick={() => handleConnect('github')}>
-                        <Github className="mr-2" /> {connected.github ? 'Connected' : 'Connect GitHub'} {connected.github && <Check className="ml-2" />}
-                      </Button>
-
-                      <Button variant={connected.youtube ? 'secondary' : 'outline'} disabled={connected.youtube || loading} onClick={() => handleConnect('youtube')}>
-                        <Youtube className="mr-2" /> {connected.youtube ? 'Connected' : 'Connect YouTube'} {connected.youtube && <Check className="ml-2" />}
-                      </Button> */}
                     </div>
+                  </div>
+                </div>
+              </motion.section>
+            )}
 
-                    {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-                      <div>
-                        <Label>LinkedIn profile</Label>
-                        <Input value={linkedInUrl} onChange={(e) => setLinkedInUrl(e.target.value)} placeholder="https://linkedin.com/in/username" />
+            {/* --- STEP 4: Social Connections --- */}
+            {step === 4 && (
+              <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Connect social media (connect at least one)</h3>
+
+                <p className="text-xs text-gray-500 mb-4">Connecting allows deeper analysis and activity insights. You can connect more later.</p>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button variant="outline" disabled={loading || connected.twitter} onClick={() => startOauthFlow("twitter")}>
+                    <Twitter className="mr-2 text-sky-500" />
+                    {connected.twitter ? "Twitter Connected" : "Connect Twitter"}
+                  </Button>
+
+                  <Button variant="outline" disabled={loading || connected.spotify} onClick={() => startOauthFlow("spotify")}>
+                    <Music className="mr-2 text-green-500" />
+                    {connected.spotify ? "Spotify Connected" : "Connect Spotify"}
+                  </Button>
+
+                  <Button variant="outline" disabled={loading || connected.reddit} onClick={() => startOauthFlow("reddit")}>
+                    <MessageSquare className="mr-2 text-orange-500" />
+                    {connected.reddit ? "Reddit Connected" : "Connect Reddit"}
+                  </Button>
+                </div>
+
+                <div className="mt-6">
+                  <Label>Connected providers</Label>
+                  <div className="mt-2 flex gap-3 items-center">
+                    {connected.twitter ? (
+                      <div className="px-3 py-1 bg-indigo-50 rounded inline-flex items-center gap-2">
+                        <Twitter /> Twitter
+                        <button onClick={() => handleDisconnect("twitter")} className="ml-2 text-xs">Disconnect</button>
                       </div>
-                      <div>
-                        <Label>GitHub profile</Label>
-                        <Input value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} placeholder="https://github.com/username" />
+                    ) : (
+                      <div className="px-3 py-1 bg-gray-50 rounded text-sm">Twitter not connected</div>
+                    )}
+
+                    {connected.reddit ? (
+                      <div className="px-3 py-1 bg-indigo-50 rounded inline-flex items-center gap-2">
+                        <MessageSquare /> Reddit
+                        <button onClick={() => handleDisconnect("reddit")} className="ml-2 text-xs">Disconnect</button>
                       </div>
+                    ) : (
+                      <div className="px-3 py-1 bg-gray-50 rounded text-sm">Reddit not connected</div>
+                    )}
 
-                      <div>
-                        <Label>Personal website / portfolio</Label>
-                        <Input value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://your.site" />
+                    {connected.spotify ? (
+                      <div className="px-3 py-1 bg-indigo-50 rounded inline-flex items-center gap-2">
+                        <Music /> Spotify
+                        <button onClick={() => handleDisconnect("spotify")} className="ml-2 text-xs">Disconnect</button>
                       </div>
-
-                      <div>
-                        <Label>YouTube channel (optional)</Label>
-                        <Input value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} placeholder="https://youtube.com/channel/..." />
-                      </div>
-
-                      <div>
-                        <Label>Discord handle</Label>
-                        <Input value={discordHandle} onChange={(e) => setDiscordHandle(e.target.value)} placeholder="username#1234" />
-                      </div>
-
-                      <div>
-                        <Label>Reddit username</Label>
-                        <Input value={redditHandle} onChange={(e) => setRedditHandle(e.target.value)} placeholder="u/username" />
-                      </div>
-
-                    </div> */}
-
+                    ) : (
+                      <div className="px-3 py-1 bg-gray-50 rounded text-sm">Spotify not connected</div>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-6">
-                  <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
+                <div className="flex justify-between mt-6 items-center">
+                  <div className="text-sm text-gray-500">
+                    {saving ? (
+                      <span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" /> Saving draft...</span>
+                    ) : (
+                      <span>Draft {draft.updatedAt ? `saved · ${new Date(draft.updatedAt).toLocaleString()}` : "(auto-save)"}</span>
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-3">
-                    <div className="text-sm text-gray-500">{atLeastOneConnected ? 'Ready to save' : 'Connect at least one social'}</div>
-                    <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white" disabled={loading || !atLeastOneConnected}>
+                    <Button variant="outline" onClick={() => setStep(3)}>Back</Button>
+                    <Button onClick={handleSaveAndContinue} className="bg-indigo-600 hover:bg-indigo-700 text-white" disabled={loading}>
                       {loading ? <><Loader2 className="mr-2 animate-spin" /> Saving...</> : 'Save & Continue'}
                     </Button>
                   </div>
                 </div>
-
               </motion.section>
             )}
-
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* ----- OAuth confirm modal ----- */}
+      {oauthConfirm.open && oauthConfirm.provider && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
+            <div className="flex justify-between items-start">
+              <h4 className="text-lg font-semibold">Connect {oauthConfirm.provider}</h4>
+              <button onClick={() => setOauthConfirm({ provider: null, open: false })}><X /></button>
+            </div>
+            <p className="mt-3 text-sm text-gray-600">
+              We saved your profile. You will now be redirected to {oauthConfirm.provider} to connect the account.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setOauthConfirm({ provider: null, open: false })}>Cancel</Button>
+              <Button onClick={confirmOauthRedirect} className="bg-indigo-600 hover:bg-indigo-700 text-white">Continue</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ----- Post-OAuth Modal (toast + modal per your choice A) ----- */}
+      {postOauthModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
+            <div className="flex justify-between items-start">
+              <h4 className="text-lg font-semibold">Connected</h4>
+              <button onClick={() => setPostOauthModal({ provider: null, open: false })}><X /></button>
+            </div>
+            <p className="mt-3 text-sm text-gray-700">
+              {postOauthModal.provider} connected successfully. Do you want to connect more accounts or go to the dashboard?
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => postOauthChoice("more")}>Connect more</Button>
+              <Button onClick={() => postOauthChoice("dashboard")} className="bg-indigo-600 hover:bg-indigo-700 text-white">Go to Dashboard</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

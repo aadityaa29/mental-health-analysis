@@ -1,212 +1,277 @@
+// src/app/dashboard/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { auth, db } from "@/lib/firebase";
-import { signOut, onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
-import { Loader2, Brain, Bell, Smile } from "lucide-react";
-import { getAuth } from "firebase/auth";
 
+// Components
+import Header from "./components/Header";
+import TopStats from "./components/TopStats";
+import InsightsSelector from "./components/InsightsSelector";
+import ConditionCard from "./components/ConditionCard";
+import GraphPanel from "./components/GraphPanel";
+import RecentInsights from "./components/RecentInsights";
+import WordFrequency from "./components/WordFrequency";
+import StabilityAdvice from "./components/StabilityAdvice";
+import LegendFooter from "./components/LegendFooter";
+import PredictionSummary from "./components/PredictionSummary";
+
+// NEW PANELS
+import SpotifyMoodRhythm from "./components/SpotifyMoodRhythm";
+import TwitterSentimentTrend from "./components/TwitterSentimentTrend";
+import DeepPersonalityInsights from "./components/DeepPersonalityInsights";
+import HabitScorecards from "./components/HabitScorecards";
+import SleepCycleRadar from "./components/SleepCycleRadar";
+import TriggerWordsDetector from "./components/TriggerWordsDetector";
+
+import {
+  SpotifyTrack,
+  TweetItem,
+  TraitsMap,
+  SleepMetrics,
+} from "./components/constants";
+
+
+type RecentInsight = {
+  text?: string;
+  prediction?: number | string;
+  date?: string;
+  timestamp?: number;
+  vader_compound?: number;
+  probs?: number[];
+  probabilities?: Record<string, number>;
+};
 
 export default function DashboardPage() {
   const router = useRouter();
+
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
+
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleConnect = async () => {
-    const user = getAuth().currentUser;
-    if (!user) {
-      alert("Please sign in first.");
-      return;
-    }
+  // ML Data
+  const [mlData, setMlData] = useState({
+    condition: "—",
+    textInsights: [] as RecentInsight[],
+    mentalHealthVals: [] as number[],
+    sentimentVals: [] as number[],
+    probsArray: [] as number[][],
+    lastRun: undefined as string | undefined,
+  });
 
-    const url = `/api/connect/twitter?uid=${user.uid}`;
-    window.location.href = url; // Redirects to Twitter OAuth
-  };
+  const [graphType, setGraphType] = useState<
+    "time" | "stacked" | "sentiment" | "stability"
+  >("time");
 
-async function connectReddit() {
-  const user = getAuth().currentUser;
-  if (!user) {
-    alert("You must be signed in!");
-    return;
-  }
-
-  const token = await user.getIdToken();
-  window.location.href = `/api/auth/reddit?token=${token}`;
-}
-async function connectSpotify() {
-  const user = getAuth().currentUser;
-  if (!user) {
-    alert("You must be signed in!");
-    return;
-  }
-
-  const token = await user.getIdToken();
-  window.location.href = `/api/auth/spotify?token=${token}`;
-}
-
+  /* -------------------------
+     AUTH + LOAD + PREDICT
+  ----------------------------*/
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsub = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
         router.push("/login");
         return;
       }
+
       setUser(currentUser);
-
-      // Fetch user profile from Firestore
-      const userRef = doc(db, "users", currentUser.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        setProfile(userSnap.data());
-      } else {
-        router.push("/profile-setup");
-      }
-
+      await triggerPredictAndLoad(currentUser.uid);
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [router]);
+    return () => unsub();
+  }, []);
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push("/login");
-  };
+  async function triggerPredictAndLoad(uid: string) {
+    setRefreshing(true);
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-indigo-50 to-white">
-        <Loader2 className="animate-spin text-indigo-600 w-8 h-8" />
-      </main>
-    );
+    try {
+      await fetch("http://127.0.0.1:8000/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: uid }),
+      });
+    } catch (err) {
+      console.warn("Prediction API failed", err);
+    }
+
+    // Load Firestore
+    const userRef = doc(db, "users", uid);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    setProfile(data);
+
+    const recent = (data?.recent_text_insights as RecentInsight[]) ?? [];
+    const mental_preds = (data?.mental_health_preds as number[]) ?? [];
+    const sentiment_preds = (data?.sentiment_preds as number[]) ?? [];
+
+    const mentalVals: number[] = [];
+    const sentimentVals: number[] = [];
+    const probsArr: number[][] = [];
+
+    recent.forEach((entry, i) => {
+      const p =
+        typeof entry.prediction === "number"
+          ? entry.prediction
+          : mental_preds[i] ?? 3;
+
+      mentalVals.push(p);
+
+      const vader =
+        typeof entry.vader_compound === "number"
+          ? entry.vader_compound
+          : sentiment_preds[i] ?? 0;
+
+      sentimentVals.push(vader);
+
+      const probs = entry.probs ?? [0, 0, 0, 0, 0];
+      probsArr.push(probs);
+    });
+
+    setMlData({
+      condition: data?.most_probable_condition ?? "—",
+      textInsights: recent,
+      mentalHealthVals: mentalVals,
+      sentimentVals: sentimentVals,
+      probsArray: probsArr,
+      lastRun: data?.last_analysis_run ?? undefined,
+    });
+
+    setRefreshing(false);
   }
 
+  /* -------------------------
+     CLEAN CHART DATA
+  ----------------------------*/
+  const chartData = useMemo(() => {
+    return mlData.textInsights.map((entry, i) => {
+      const dateISO =
+        entry.date ??
+        (entry.timestamp ? new Date(entry.timestamp).toISOString() : undefined);
+
+      return {
+        label: dateISO
+          ? new Date(dateISO).toLocaleDateString()
+          : `Entry ${i + 1}`,
+        date: dateISO,
+        mental: mlData.mentalHealthVals[i] ?? 3,
+        sentiment: mlData.sentimentVals[i] ?? 0,
+        probs: mlData.probsArray[i] ?? [0, 0, 0, 0, 0],
+        text: entry.text ?? "",
+      };
+    });
+  }, [mlData]);
+
+  /* -------------------------
+     WEEKLY STABILITY
+  ----------------------------*/
+  const weeklyStability = useMemo(() => {
+    if (!chartData.length) return 100;
+    const last7 = chartData.slice(-7).map((d) => d.mental);
+    const mean = last7.reduce((a, b) => a + b, 0) / last7.length;
+    const variance =
+      last7.reduce((s, v) => s + (v - mean) ** 2, 0) / last7.length;
+    const std = Math.sqrt(variance);
+    const stability = Math.max(0, 1 - std / 2);
+    return Math.round(stability * 100);
+  }, [chartData]);
+
+  /* -------------------------
+     WORD CLOUD
+  ----------------------------*/
+  const topWords = useMemo(() => {
+    const text = mlData.textInsights.map((x) => x.text).join(" ");
+    const cleaned = text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .split(" ")
+      .filter((w) => w.length > 2);
+    const freq: Record<string, number> = {};
+    cleaned.forEach((w) => (freq[w] = (freq[w] || 0) + 1));
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([w, c]) => ({ word: w, count: c }));
+  }, [mlData]);
+
+  /* -------------------------
+     PLACEHOLDERS matching component types
+     (replace with real Firestore fetch later)
+  ----------------------------*/
+  const spotifyTracks: SpotifyTrack[] = []; // SpotifyTrack defined in constants
+ const twitterTweets: TweetItem[] = []; // TwitterTweet defined in constants
+
+  const llmTraits: TraitsMap = {
+  openness: 0,
+  conscientiousness: 0,
+  extraversion: 0,
+  agreeableness: 0,
+  neuroticism: 0,
+};
+const sleepMetrics: SleepMetrics = {
+  sleepHours: 7,
+  bedtimeConsistency: 0.8,
+  wakeConsistency: 0.75,
+  sleepQuality: 0.7,
+};
+
+
+  /* -------------------------
+     RENDER
+  ----------------------------*/
   return (
     <main className="min-h-screen bg-gradient-to-b from-indigo-50 to-white px-6 py-10">
-      <div className="max-w-5xl mx-auto">
-        {/* Header Section */}
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-700 flex items-center gap-2">
-            <Brain className="w-7 h-7" /> Welcome,{" "}
-            {profile?.name || user?.displayName || "User"} 🧠
-          </h1>
-          <Button variant="outline" onClick={handleLogout}>
-            Logout
-          </Button>
+      <div className="max-w-6xl mx-auto">
+        <Header
+          user={user}
+          profile={profile}
+          lastRun={mlData.lastRun}
+          refreshing={refreshing}
+          triggerPredictAndLoad={triggerPredictAndLoad}
+        />
+
+        <TopStats profile={profile} />
+
+        <InsightsSelector graphType={graphType} setGraphType={setGraphType} />
+        <ConditionCard condition={mlData.condition} />
+
+        <GraphPanel
+          graphType={graphType}
+          chartData={chartData}
+          weeklyStability={weeklyStability}
+        />
+
+        {/* Additional AI Sections */}
+        <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SpotifyMoodRhythm tracks={spotifyTracks} />
+          <TwitterSentimentTrend tweets={twitterTweets} />
         </div>
 
-        {/* Dashboard Content */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="grid md:grid-cols-3 gap-6"
-        >
-          {/* Mood Summary Card */}
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Smile className="text-yellow-500" /> Current Mood
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-semibold text-indigo-700">
-                {profile?.moodLevel ?? "—"}
-              </p>
-              <p className="text-gray-500 mt-1">on a scale of 1–10</p>
-            </CardContent>
-          </Card>
+        <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <DeepPersonalityInsights traits={llmTraits} />
+          <HabitScorecards profile={profile} />
+        </div>  
 
-          {/* Sleep Info */}
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Sleep Patterns</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-700">
-                You’ve been averaging{" "}
-                <span className="font-semibold">
-                  {profile?.sleepHours ?? "—"} hrs
-                </span>{" "}
-                of sleep.
-              </p>
-              <p className="text-gray-500 text-sm mt-2">
-                Recommended: 7–8 hours/day
-              </p>
-            </CardContent>
-          </Card>
+        <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SleepCycleRadar metrics={sleepMetrics} />
+          <TriggerWordsDetector insights={mlData.textInsights} />
+        </div>
 
-          {/* Alerts */}
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="text-red-500" /> Alerts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {profile?.moodLevel && profile?.moodLevel < 4 ? (
-                <p className="text-red-600 font-medium">
-                  ⚠️ Your recent mood is low. Try taking a short break or
-                  journaling today.
-                </p>
-              ) : (
-                <p className="text-green-600 font-medium">
-                  😊 You seem to be doing fine! Keep up your positive habits.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <RecentInsights mlData={mlData} />
+          <WordFrequency topWords={topWords} />
+          <StabilityAdvice weeklyStability={weeklyStability} condition={mlData.condition} />
+        </div>
 
-        {/* Insights Section */}
-        <motion.section
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.6 }}
-          className="mt-12"
-        >
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">
-            Behavioral Insights
-          </h2>
-          <p className="text-gray-600">
-            Based on your connected social media data, NeuraSense will soon
-            provide insights like:
-          </p>
-          <ul className="list-disc pl-5 text-gray-600 mt-3 space-y-1">
-            <li>Detect mood swings through text & posting frequency</li>
-            <li>Analyze stress levels via engagement & sentiment</li>
-            <li>Recommend personalized coping techniques</li>
-          </ul>
-        </motion.section>
+        <PredictionSummary mlData={mlData} />
+        <LegendFooter />
       </div>
-
-      <button
-      onClick={handleConnect}
-      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-    >
-      Connect Twitter
-    </button>
-
-    <Button
-  variant="outline"
-  onClick={connectReddit}
->
-  Connect Reddit
-</Button>
-
-<Button
-  variant="outline"
-  onClick={connectSpotify}
->
-  Connect Spotify
-</Button>
-
     </main>
   );
 }

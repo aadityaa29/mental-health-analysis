@@ -1,41 +1,40 @@
+// src/app/api/connect/twitter/route.ts
 import { NextResponse } from "next/server";
 import { TwitterApi } from "twitter-api-v2";
-import { adminDB  } from "@/lib/firebaseAdmin"; // ✅ fixed name
+import { adminDB } from "@/lib/firebaseAdmin";
 
 export async function GET(req: Request) {
   try {
-    const urlObj = new URL(req.url);
-    const uid = urlObj.searchParams.get("uid");
+    const url = new URL(req.url);
+    const uid = url.searchParams.get("uid");
 
-    if (!uid) {
-      return NextResponse.json({ error: "Missing user ID" }, { status: 400 });
-    }
-
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL!;
-    const callbackUrl = `${baseUrl}/api/connect/twitter/callback`;
+    if (!uid)
+      return NextResponse.json({ error: "Missing UID" }, { status: 400 });
 
     const client = new TwitterApi({
       clientId: process.env.TWITTER_CLIENT_ID!,
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
     });
 
-    const scopes = ["tweet.read", "users.read", "offline.access"];
+    const callbackUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/api/connect/twitter/callback`;
 
-    const { url, codeVerifier, state } = client.generateOAuth2AuthLink(callbackUrl, {
-      scope: scopes,
-    });
+    const { url: authUrl, codeVerifier, state } = client.generateOAuth2AuthLink(
+      callbackUrl,
+      {
+        scope: ["tweet.read", "users.read", "offline.access"],
+      }
+    );
 
-    // Save verifier + uid temporarily in Firestore
-    await adminDB .collection("oauth_temp").doc(state).set({
-      codeVerifier,
+    await adminDB.collection("oauth_temp").doc(state).set({
       uid,
+      codeVerifier,
       provider: "twitter",
       createdAt: new Date(),
     });
 
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(authUrl);
   } catch (err: any) {
     console.error("Twitter connect error:", err);
-    return NextResponse.json({ error: err.message || "Connection failed" }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
