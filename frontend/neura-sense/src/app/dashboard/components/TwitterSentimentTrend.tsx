@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -13,75 +13,162 @@ import {
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { SENTIMENT_COLORS } from "./constants";
+import { doc, getDoc } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
 
 type TweetItem = {
   id?: string;
   text: string;
-  created_at: string; // ISO
-  sentiment?: number; // -1..1 (VADER or model)
+  timestamp: number;
+  sentiment?: number;
 };
 
-type Props = {
+export default function TwitterSentimentTrend({
+  tweets: propTweets,
+}: {
   tweets?: TweetItem[];
-};
+}) {
+  const [cacheTweets, setCacheTweets] = useState<TweetItem[]>([]);
 
-export default function TwitterSentimentTrend({ tweets }: Props) {
-  // fallback/mock tweets
+  // Load tweets from Firestore cache
+  useEffect(() => {
+    const loadCache = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const ref = doc(db, "users", user.uid, "cache", "twitter");
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+      const items = (data?.items || []) as any[];
+
+      const mapped = items.map((it: any, i: number) => ({
+        id: it.id ?? String(i),
+        text: it.text,
+        timestamp: it.timestamp,
+        sentiment: it.sentiment ?? undefined,
+      }));
+
+      setCacheTweets(mapped);
+    };
+
+    loadCache();
+  }, []);
+
+  // If props provided → use them; else → use cached tweets
+  const srcTweets = propTweets?.length ? propTweets : cacheTweets;
+
+  // Convert to chart-friendly format
   const data = useMemo(() => {
-    const src =
-      tweets && tweets.length > 0
-        ? tweets
-        : fallbackTweets();
+    if (!srcTweets || srcTweets.length === 0) return fallbackTweets();
 
-    return src
-      .map((t) => ({
-        label: new Date(t.created_at).toLocaleDateString(),
-        timeLabel: new Date(t.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        sentiment: typeof t.sentiment === "number" ? Number(t.sentiment.toFixed(2)) : 0,
-        text: t.text,
-        id: t.id ?? Math.random().toString(36).slice(2, 9),
-      }))
-      .sort((a, b) => new Date(a.label).getTime() - new Date(b.label).getTime());
-  }, [tweets]);
+    return srcTweets
+      .map((t) => {
+        const sent =
+          typeof t.sentiment === "number"
+            ? t.sentiment
+            : heuristicSentiment(t.text);
+
+        return {
+          timestamp: t.timestamp, // ⭐ REQUIRED
+          label: new Date(t.timestamp).toLocaleDateString(),
+          timeLabel: new Date(t.timestamp).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          sentiment: Number(sent.toFixed(2)),
+          text: t.text,
+          id: t.id ?? Math.random().toString(36).slice(2, 9),
+        };
+      })
+      .sort((a, b) => a.timestamp - b.timestamp); // ⭐ SORT BY RAW TIMESTAMP
+  }, [srcTweets]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Twitter Sentiment Trend</CardTitle>
+        <CardTitle className="text-indigo-700 font-bold">
+          Twitter Sentiment Trend
+        </CardTitle>
       </CardHeader>
+
       <CardContent>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" tickFormatter={(v) => new Date(v).toLocaleDateString()} />
+              <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+
+              <XAxis dataKey="label" />
               <YAxis domain={[-1, 1]} />
+
               <Tooltip
-                formatter={(value: any) => [value, "Sentiment"]}
-                labelFormatter={(label: string, payload: any) => {
+                formatter={(val) => [val, "Sentiment Score"]}
+                labelFormatter={(label, payload) => {
                   const p = payload?.[0]?.payload;
-                  return `${p?.timeLabel ?? label} — ${p?.text?.slice(0, 80) ?? ""}`;
+                  return `${p?.timeLabel ?? label} — ${
+                    p?.text?.slice(0, 90) ?? ""
+                  }`;
+                }}
+                contentStyle={{
+                  borderRadius: 10,
+                  borderColor: "#6366F1",
                 }}
               />
-              <Line type="monotone" dataKey="sentiment" stroke={SENTIMENT_COLORS.positive} strokeWidth={2} dot={{ r: 3 }} />
-              <Brush dataKey="label" height={20} stroke="#8884d8" />
+
+              <Line
+                type="monotone"
+                dataKey="sentiment"
+                stroke={SENTIMENT_COLORS.positive}
+                strokeWidth={2}
+                dot={{ r: 3 }}
+              />
+
+              <Brush dataKey="label" height={20} stroke="#6366F1" />
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="text-xs text-gray-500 mt-3">
-          Sentiment range: -1 (negative) → +1 (positive). Data sources: connected Twitter.
-        </div>
+
+        <p className="text-xs text-gray-500 mt-3">
+          Sentiment: -1 (negative) → +1 (positive). Data fetched from your
+          Twitter activity.
+        </p>
       </CardContent>
     </Card>
   );
 }
 
-function fallbackTweets(): TweetItem[] {
+/* ------------------------------
+   Simple fallback sentiment
+--------------------------------*/
+function heuristicSentiment(text: string): number {
+  const t = text.toLowerCase();
+  const positiveWords = ["happy", "good", "great", "love", "excited", "awesome"];
+  const negativeWords = ["sad", "bad", "angry", "anxious", "depressed", "stress"];
+
+  let score = 0;
+  positiveWords.forEach((w) => t.includes(w) && (score += 0.3));
+  negativeWords.forEach((w) => t.includes(w) && (score -= 0.3));
+
+  return Math.max(-1, Math.min(1, score));
+}
+
+/* ------------------------------
+   Fallback (UI never breaks)
+--------------------------------*/
+function fallbackTweets(): any[] {
   const now = Date.now();
   return [
-    { text: "Feeling anxious today about exams", created_at: new Date(now - 86400000 * 3).toISOString(), sentiment: -0.6 },
-    { text: "Had a good walk and fresh air", created_at: new Date(now - 86400000 * 2).toISOString(), sentiment: 0.5 },
-    { text: "Work has been stressful", created_at: new Date(now - 86400000).toISOString(), sentiment: -0.3 },
-    { text: "Reading a book is calming", created_at: new Date(now - 3600000).toISOString(), sentiment: 0.4 },
+    {
+      text: "Connect Twitter to view your real sentiment timeline.",
+      timestamp: now - 86400000,
+      sentiment: 0,
+    },
+    {
+      text: "This is sample data only.",
+      timestamp: now - 3600000,
+      sentiment: 0.1,
+    },
   ];
 }

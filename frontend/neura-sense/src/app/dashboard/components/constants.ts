@@ -42,10 +42,11 @@ export type SpotifyTrack = {
    TYPE: TweetItem (MATCHES TwitterSentimentTrend)
 ----------------------------------------------*/
 export type TweetItem = {
-  id: string;
+  id?: string;
   text: string;
-  sentiment: number; // -1..1
-  created_at: string; // MUST be string
+  timestamp: number;        // <-- REQUIRED FOR TREND
+  sentiment?: number;       // optional
+  created_at?: string;      // optional (in case some APIs use it)
 };
 
 /* ----------------------------------------------

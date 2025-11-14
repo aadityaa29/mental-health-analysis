@@ -1,5 +1,3 @@
-//frontend/neura-sense/src/app/dashboard/components/SleepCycleRadar.tsx
-
 "use client";
 
 import React, { useMemo } from "react";
@@ -14,15 +12,11 @@ import {
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
-/**
- * Sleep radar requires a few metrics: sleepHours, bedtimeConsistency (0-1), wakeConsistency (0-1), sleepQuality (0-1)
- */
-
 type SleepMetrics = {
   sleepHours?: number;
-  bedtimeConsistency?: number; // 0..1
-  wakeConsistency?: number; // 0..1
-  sleepQuality?: number; // 0..1
+  bedtimeConsistency?: number;
+  wakeConsistency?: number;
+  sleepQuality?: number;
 };
 
 type Props = {
@@ -32,39 +26,68 @@ type Props = {
 export default function SleepCycleRadar({ metrics }: Props) {
   const data = useMemo(() => {
     const m = metrics ?? {};
-    const sleepHoursNorm = typeof m.sleepHours === "number" ? Math.min(1, m.sleepHours / 8) : 0.75;
-    const bedtimeConsistency = m.bedtimeConsistency ?? 0.7;
-    const wakeConsistency = m.wakeConsistency ?? 0.65;
-    const sleepQuality = m.sleepQuality ?? 0.7;
+    const sleepHoursNorm =
+      typeof m.sleepHours === "number" ? Math.min(1, m.sleepHours / 8) : 0.75;
 
     return [
-      { metric: "Sleep hrs", value: Number(sleepHoursNorm.toFixed(2)) },
-      { metric: "Bedtime", value: Number(bedtimeConsistency.toFixed(2)) },
-      { metric: "Wake time", value: Number(wakeConsistency.toFixed(2)) },
-      { metric: "Quality", value: Number(sleepQuality.toFixed(2)) },
+      { metric: "Sleep Hours", value: Number(sleepHoursNorm.toFixed(2)) },
+      { metric: "Bedtime Consistency", value: Number((m.bedtimeConsistency ?? 0.7).toFixed(2)) },
+      { metric: "Wake Consistency", value: Number((m.wakeConsistency ?? 0.65).toFixed(2)) },
+      { metric: "Sleep Quality", value: Number((m.sleepQuality ?? 0.7).toFixed(2)) },
     ];
   }, [metrics]);
 
   return (
-    <Card>
+    <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle>Sleep Cycle Radar</CardTitle>
+        <CardTitle className="text-indigo-700 font-bold">
+          Sleep Cycle Radar
+        </CardTitle>
       </CardHeader>
+
       <CardContent>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="metric" />
-              <PolarRadiusAxis angle={30} domain={[0, 1]} />
-              <Radar name="Sleep profile" dataKey="value" stroke="#6366F1" fill="#6366F1" fillOpacity={0.2} />
-              <Tooltip formatter={(v) => `${Math.round(Number(v) * 100)}%`} />
+            <RadarChart cx="50%" cy="50%" outerRadius="75%" data={data}>
+              <PolarGrid stroke="#E5E7EB" strokeOpacity={0.6} />
+              <PolarAngleAxis
+                dataKey="metric"
+                tick={{ fill: "#374151", fontSize: 12, fontWeight: 500 }}
+              />
+              <PolarRadiusAxis
+                tick={false}
+                axisLine={false}
+                domain={[0, 1]}
+              />
+
+              {/* Radar Shape */}
+              <Radar
+                name="Sleep Profile"
+                dataKey="value"
+                stroke="#6366F1"
+                fill="#6366F1"
+                fillOpacity={0.25}
+                strokeWidth={2}
+              />
+
+              {/* Tooltip */}
+              <Tooltip
+                contentStyle={{
+                  borderRadius: "10px",
+                  borderColor: "#6366F1",
+                  fontSize: "12px",
+                }}
+                formatter={(v: number) => `${Math.round(v * 100)}%`}
+              />
             </RadarChart>
           </ResponsiveContainer>
         </div>
-        <div className="text-xs text-gray-500 mt-3">
-          Radar shows normalized sleep metrics — aim for balanced radar across axes.
-        </div>
+
+        <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+          Balanced sleep patterns help improve mood, energy, and emotional
+          stability. Aim for a smooth, even radar shape across all sleep
+          metrics.
+        </p>
       </CardContent>
     </Card>
   );

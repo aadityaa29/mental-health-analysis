@@ -20,7 +20,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,7 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Labels
 ILLNESS_MAP = {
     0: "Anxiety",
     1: "Bipolar",
@@ -38,7 +36,6 @@ ILLNESS_MAP = {
     4: "PTSD",
 }
 
-# Convert numpy → python native
 def to_native(obj):
     if isinstance(obj, dict):
         return {k: to_native(v) for k, v in obj.items()}
@@ -46,51 +43,52 @@ def to_native(obj):
         return [to_native(v) for v in obj]
     elif isinstance(obj, np.generic):
         return obj.item()
-    else:
-        return obj
+    return obj
 
-# Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MH_MODEL_DIR = os.path.join(BASE_DIR, "models", "fine_tuned_mentalbert")
 SENT_MODEL_PATH = os.path.join(BASE_DIR, "models", "sentiment_model", "model.pkl")
 SENT_VEC_PATH = os.path.join(BASE_DIR, "models", "sentiment_model", "vectorizer.pkl")
 
-# Load model
 predictor = train_test_data.MetaModelPredictor(
     transformer_model_dir=MH_MODEL_DIR,
     sent_model_path=SENT_MODEL_PATH,
     sent_vec_path=SENT_VEC_PATH,
 )
 
-# Request schema
 class UserRequest(BaseModel):
     user_id: str
 
 
 # =========================================================
-# 🚀 Prediction Endpoint (Reddit + Twitter + Spotify merged)
+# 🚀 Prediction Endpoint (Reddit + Twitter + Spotify)
 # =========================================================
 @app.post("/predict")
 async def predict(req: UserRequest):
     logger.info(f"📩 Received analysis request for user: {req.user_id}")
 
-    # 1️⃣ Extract merged data from all connected sources
-    raw_items = data_extraction.extract_all_sources(req.user_id)
+    # 🔥 UPDATED — extract with counts
+    extraction = data_extraction.extract_all_sources(req.user_id)
+
+    reddit_count = extraction["reddit"]
+    twitter_count = extraction["twitter"]
+    spotify_count = extraction["spotify"]
+
+    raw_items = extraction["items"]
+
+    logger.info(f"🟠 Reddit extracted: {reddit_count}")
+    logger.info(f"🔵 Twitter extracted: {twitter_count}")
+    logger.info(f"🟢 Spotify extracted: {spotify_count}")
 
     if not raw_items:
         raise HTTPException(status_code=404, detail="No social media data found.")
 
-    # Extract lists
     raw_texts = [item["text"] for item in raw_items]
     timestamps = [item["timestamp"] for item in raw_items]
 
-    # 2️⃣ Preprocess
     clean_texts = data_preprocessing.clean_text_batch_v2(raw_texts)
-
-    # 3️⃣ ML Predictions
     mh_preds, sent_preds = predictor.predict_dual(raw_texts, clean_texts)
 
-    # 4️⃣ Text-level detailed analysis
     text_level_analysis = []
     for raw, clean, mh, sent, ts in zip(raw_texts, clean_texts, mh_preds, sent_preds, timestamps):
         text_level_analysis.append({
@@ -102,14 +100,12 @@ async def predict(req: UserRequest):
             "timestamp": ts,
         })
 
-    # 5️⃣ Convert timestamps → python datetime for charts
     python_dates = [datetime.fromtimestamp(ts / 1000) for ts in timestamps]
 
     date_grouped_analysis = analysis_plot.prepare_date_grouped_analysis(
         python_dates, mh_preds, sent_preds
     )
 
-    # 6️⃣ Most probable condition
     mode_label, mode_prob = analysis_plot.calculate_most_probable_illness(
         mh_preds, normal_label=3, threshold=0.4
     )
@@ -120,7 +116,6 @@ async def predict(req: UserRequest):
         else str(mode_label)
     )
 
-    # 7️⃣ Save ML results to Firestore
     db.collection("users").document(req.user_id).update({
         "most_probable_condition": most_probable_illness,
         "mode_probability": float(mode_prob) if mode_prob else None,
@@ -132,6 +127,7 @@ async def predict(req: UserRequest):
 
     logger.info(f"✅ Analysis completed & saved for {req.user_id}")
 
+    # 🔥 Return extraction logs for frontend console
     return to_native({
         "text_level_analysis": text_level_analysis,
         "date_grouped_analysis": date_grouped_analysis,
@@ -139,4 +135,9 @@ async def predict(req: UserRequest):
         "mode_probability": float(mode_prob) if mode_prob else None,
         "mental_health_preds": [int(v) for v in mh_preds],
         "sentiment_preds": [float(v) for v in sent_preds],
+        "extraction_logs": {
+            "reddit": reddit_count,
+            "twitter": twitter_count,
+            "spotify": spotify_count
+        }
     })

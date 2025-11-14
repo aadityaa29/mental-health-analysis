@@ -6,14 +6,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { Menu, LogOut, User, LayoutDashboard } from "lucide-react";
+import { Menu, LogOut, User, LayoutDashboard, Compass } from "lucide-react";
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
 
-  // Track Firebase auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -23,7 +22,7 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     await signOut(auth);
-    router.push("/login");
+    router.push("/");
   };
 
   return (
@@ -42,6 +41,16 @@ export default function Navbar() {
 
       {/* Desktop Menu */}
       <div className="hidden md:flex items-center gap-6">
+
+        {/* 🌟 Explore Button (for both logged-in & logged-out users) */}
+        <Button
+          variant="ghost"
+          className="flex items-center gap-2"
+          onClick={() => router.push("/explore")}
+        >
+          <Compass size={18} /> Explore
+        </Button>
+
         {user ? (
           <>
             <Button
@@ -51,6 +60,7 @@ export default function Navbar() {
             >
               <LayoutDashboard size={18} /> Dashboard
             </Button>
+
             <Button
               variant="ghost"
               className="flex items-center gap-2"
@@ -58,6 +68,7 @@ export default function Navbar() {
             >
               <User size={18} /> Profile
             </Button>
+
             <Button
               variant="outline"
               className="flex items-center gap-2 text-red-600 border-red-300 hover:bg-red-50"
@@ -68,10 +79,7 @@ export default function Navbar() {
           </>
         ) : (
           <>
-            <Button
-              variant="outline"
-              onClick={() => router.push("/login")}
-            >
+            <Button variant="outline" onClick={() => router.push("/login")}>
               Login
             </Button>
             <Button
@@ -99,6 +107,18 @@ export default function Navbar() {
           animate={{ opacity: 1, y: 0 }}
           className="absolute top-16 right-6 bg-white shadow-md rounded-lg p-4 flex flex-col gap-3 w-48 border border-gray-200 md:hidden"
         >
+          {/* 🌟 Explore for mobile */}
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2"
+            onClick={() => {
+              router.push("/explore");
+              setIsOpen(false);
+            }}
+          >
+            <Compass size={18} /> Explore
+          </Button>
+
           {user ? (
             <>
               <Button
@@ -107,24 +127,28 @@ export default function Navbar() {
                   router.push("/dashboard");
                   setIsOpen(false);
                 }}
+                className="flex items-center gap-2"
               >
-                Dashboard
+                <LayoutDashboard size={18} /> Dashboard
               </Button>
+
               <Button
                 variant="ghost"
                 onClick={() => {
                   router.push("/profile-setup");
                   setIsOpen(false);
                 }}
+                className="flex items-center gap-2"
               >
-                Profile
+                <User size={18} /> Profile
               </Button>
+
               <Button
                 variant="outline"
-                className="text-red-600 border-red-300 hover:bg-red-50"
+                className="text-red-600 border-red-300 hover:bg-red-50 flex items-center gap-2"
                 onClick={handleLogout}
               >
-                Logout
+                <LogOut size={18} /> Logout
               </Button>
             </>
           ) : (
@@ -138,6 +162,7 @@ export default function Navbar() {
               >
                 Login
               </Button>
+
               <Button
                 onClick={() => {
                   router.push("/signup");

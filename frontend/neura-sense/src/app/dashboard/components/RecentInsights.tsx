@@ -4,38 +4,67 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CLASS_MAP } from "./constants";
 
 export default function RecentInsights({ mlData }: any) {
+  const insights = mlData?.textInsights ?? [];
+
   return (
     <Card>
       <CardContent>
-        <h3 className="font-semibold text-lg">Recent Text Insights</h3>
-        <div className="mt-3 max-h-64 overflow-auto space-y-3">
+        <h3 className="font-semibold text-lg text-indigo-700">
+          Recent Text Insights
+        </h3>
 
-          {mlData.textInsights.length === 0 && (
-            <div className="text-gray-500">No insights yet.</div>
+        <div className="mt-4 max-h-72 overflow-auto space-y-3 pr-1 custom-scroll">
+          {insights.length === 0 && (
+            <div className="text-gray-500 text-sm">No insights yet.</div>
           )}
 
-          {mlData.textInsights.map((entry: any, i: number) => {
-            const cls = mlData.mentalHealthVals[i] ?? 3;
+          {insights.map((entry: any, i: number) => {
+            const cls = mlData.mentalHealthVals?.[i] ?? 3;
             const color = CLASS_MAP[cls]?.color ?? "#111";
 
             return (
-              <div key={i} className="p-2 rounded border">
-                <div className="flex justify-between items-center">
-                  <div className="font-medium text-sm" style={{ color }}>
+              <div
+                key={i}
+                className="p-3 rounded-lg border bg-white hover:shadow-sm transition-shadow"
+              >
+                {/* Header Row */}
+                <div className="flex items-center justify-between mb-1">
+                  {/* Condition label */}
+                  <span
+                    className="text-sm font-semibold"
+                    style={{ color }}
+                  >
                     {CLASS_MAP[cls]?.label}
-                  </div>
-                  <div className="text-xs text-gray-500">
+                  </span>
+
+                  {/* Timestamp */}
+                  <span className="text-xs text-gray-500">
                     {entry.timestamp
                       ? new Date(entry.timestamp).toLocaleString()
                       : ""}
-                  </div>
+                  </span>
                 </div>
 
-                <div className="text-sm mt-1">{entry.text}</div>
+                {/* Insight Text */}
+                <div className="text-sm text-gray-700 leading-relaxed">
+                  {entry.text}
+                </div>
 
+                {/* Sentiment */}
                 {typeof entry.vader_compound === "number" && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    Sentiment: {entry.vader_compound.toFixed(2)}
+                  <div className="text-xs text-gray-500 mt-2">
+                    Sentiment Score:{" "}
+                    <span
+                      className={
+                        entry.vader_compound > 0
+                          ? "text-green-600"
+                          : entry.vader_compound < 0
+                          ? "text-red-500"
+                          : "text-gray-600"
+                      }
+                    >
+                      {entry.vader_compound.toFixed(2)}
+                    </span>
                   </div>
                 )}
               </div>

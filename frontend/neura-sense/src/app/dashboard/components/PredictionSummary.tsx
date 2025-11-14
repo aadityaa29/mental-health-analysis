@@ -14,7 +14,7 @@ import {
   Line,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CLASS_MAP } from "./constants"; 
+import { CLASS_MAP } from "./constants";
 import { ArrowUp, ArrowDown } from "lucide-react";
 
 type MlData = {
@@ -36,197 +36,274 @@ type Props = {
   mlData: MlData;
 };
 
-// If you don't have CLASS_MAP exported elsewhere, you can replace this import by the object below:
-// const CLASS_MAP: Record<number, { label: string; color: string }> = {
-//   0: { label: "Anxiety", color: "#F59E0B" },
-//   1: { label: "Bipolar", color: "#FBBF24" },
-//   2: { label: "Depression", color: "#EF4444" },
-//   3: { label: "Normal", color: "#10B981" },
-//   4: { label: "PTSD", color: "#8B5CF6" },
-// };
-
 const periodOptions = ["7d", "30d"] as const;
 
 export default function PredictionSummary({ mlData }: Props) {
-  const [period, setPeriod] = useState<typeof periodOptions[number]>("7d");
+  const [period, setPeriod] =
+    useState<typeof periodOptions[number]>("7d");
 
-  // Normalize insights with date
+  /* -----------------------------
+      NORMALIZE TEXT INSIGHTS
+  ----------------------------- */
   const insights = useMemo(() => {
     return (
-      (mlData?.textInsights || []).map((it, i) => {
+      mlData?.textInsights?.map((it, i) => {
         const ts =
           it.timestamp ??
           (it.date ? new Date(it.date).getTime() : undefined) ??
           Date.now();
-        const pred = typeof it.prediction === "number"
-          ? it.prediction
-          : typeof it.prediction === "string" && !isNaN(Number(it.prediction))
+
+        const pred =
+          typeof it.prediction === "number"
+            ? it.prediction
+            : typeof it.prediction === "string" &&
+              !isNaN(Number(it.prediction))
             ? Number(it.prediction)
-            : (mlData?.mentalHealthVals && mlData.mentalHealthVals[i]) ?? 3;
+            : mlData?.mentalHealthVals?.[i] ?? 3;
+
         return {
           ...it,
           timestamp: ts,
           prediction: pred,
-        } as { timestamp: number; prediction: number; text?: string; probs?: number[]; probabilities?: Record<string, number> };
-      }) || []
+        };
+      }) ?? []
     );
   }, [mlData]);
 
-  // filter by period
+  /* -----------------------------
+      PERIOD FILTER
+  ----------------------------- */
   const now = Date.now();
-  const cutoff = useMemo(() => {
-    if (period === "7d") return now - 1000 * 60 * 60 * 24 * 7;
-    return now - 1000 * 60 * 60 * 24 * 30;
-  }, [period]);
+  const cutoff = useMemo(
+    () =>
+      period === "7d"
+        ? now - 7 * 24 * 60 * 60 * 1000
+        : now - 30 * 24 * 60 * 60 * 1000,
+    [period]
+  );
 
-  const periodInsights = useMemo(() => {
-    return insights.filter((i) => (i.timestamp ?? now) >= cutoff);
-  }, [insights, cutoff, now]);
+  const periodInsights = useMemo(
+    () => insights.filter((i) => (i.timestamp ?? now) >= cutoff),
+    [insights, cutoff, now]
+  );
 
-  // Count classes
+  /* -----------------------------
+      CLASS COUNTS
+  ----------------------------- */
   const countsByClass = useMemo(() => {
-    const counts: number[] = [0, 0, 0, 0, 0];
-    for (const it of periodInsights) {
+    const counts = [0, 0, 0, 0, 0];
+    periodInsights.forEach((it) => {
       const p = Number(it.prediction ?? 3);
-      if (!isNaN(p) && p >= 0 && p < counts.length) counts[p] += 1;
-    }
+      if (!isNaN(p) && p >= 0 && p <= 4) counts[p] += 1;
+    });
     return counts;
   }, [periodInsights]);
 
-  // Build chart data for bar chart (class label & count)
-  const chartData = useMemo(() => {
-    return countsByClass.map((c, idx) => ({
-      cls: idx,
-      label: (CLASS_MAP[idx]?.label ?? String(idx)),
-      count: c,
-      color: CLASS_MAP[idx]?.color ?? "#9CA3AF",
-    }));
-  }, [countsByClass]);
+  /* -----------------------------
+      BAR CHART DATA
+  ----------------------------- */
+  const chartData = useMemo(
+    () =>
+      countsByClass.map((count, idx) => ({
+        cls: idx,
+        label: CLASS_MAP[idx]?.label ?? String(idx),
+        count,
+        color: CLASS_MAP[idx]?.color ?? "#999",
+      })),
+    [countsByClass]
+  );
 
-  // top class & trend vs previous period (previous 7/30)
-  const prevCutoff = useMemo(() => {
-    if (period === "7d") return now - 1000 * 60 * 60 * 24 * 14; // prior week start
-    return now - 1000 * 60 * 60 * 24 * 60; // prior 30d window
-  }, [period, now]);
+  /* -----------------------------
+      TREND VS PREVIOUS PERIOD
+  ----------------------------- */
+  const prevCutoff = useMemo(
+    () =>
+      period === "7d"
+        ? now - 14 * 24 * 60 * 60 * 1000
+        : now - 60 * 24 * 60 * 60 * 1000,
+    [period, now]
+  );
 
-  const prevPeriodInsights = useMemo(() => {
-    return insights.filter((i) => (i.timestamp ?? now) >= prevCutoff && (i.timestamp ?? now) < cutoff);
-  }, [insights, prevCutoff, cutoff, now]);
+  const prevPeriodInsights = useMemo(
+    () =>
+      insights.filter(
+        (i) =>
+          (i.timestamp ?? now) >= prevCutoff &&
+          (i.timestamp ?? now) < cutoff
+      ),
+    [insights, prevCutoff, cutoff, now]
+  );
 
   const prevCounts = useMemo(() => {
-    const counts: number[] = [0, 0, 0, 0, 0];
-    for (const it of prevPeriodInsights) {
+    const counts = [0, 0, 0, 0, 0];
+    prevPeriodInsights.forEach((it) => {
       const p = Number(it.prediction ?? 3);
-      if (!isNaN(p) && p >= 0 && p < counts.length) counts[p] += 1;
-    }
+      if (!isNaN(p) && p >= 0 && p <= 4) counts[p] += 1;
+    });
     return counts;
   }, [prevPeriodInsights]);
 
   const topClassIdx = useMemo(() => {
-    const max = countsByClass.reduce((acc, cur, idx) => (cur > acc.count ? { idx, count: cur } : acc), { idx: 3, count: countsByClass[3] });
-    return max.idx;
+    let maxIdx = 3;
+    let maxCount = countsByClass[3];
+    countsByClass.forEach((c, i) => {
+      if (c > maxCount) {
+        maxCount = c;
+        maxIdx = i;
+      }
+    });
+    return maxIdx;
   }, [countsByClass]);
 
   const trendDelta = useMemo(() => {
     const cur = countsByClass[topClassIdx] ?? 0;
     const prev = prevCounts[topClassIdx] ?? 0;
-    const diff = cur - prev;
-    const pct = prev === 0 ? (cur === 0 ? 0 : 100) : Math.round(((cur - prev) / prev) * 100);
-    return { diff, pct };
+    const pct =
+      prev === 0 ? (cur === 0 ? 0 : 100) : Math.round(((cur - prev) / prev) * 100);
+    return { diff: cur - prev, pct };
   }, [countsByClass, prevCounts, topClassIdx]);
 
-  // Sparkline: count over days
+  /* -----------------------------
+      SPARKLINE DATA
+  ----------------------------- */
   const sparkData = useMemo(() => {
-    // bucket counts per day for the selected period
     const days = period === "7d" ? 7 : 30;
-    const daysArr = Array.from({ length: days }).map((_, i) => {
-      const dayStart = new Date(now - (days - 1 - i) * 24 * 60 * 60 * 1000);
-      // normalize to midnight
-      dayStart.setHours(0, 0, 0, 0);
-      return { ts: dayStart.getTime(), label: dayStart.toLocaleDateString(), count: 0 };
+
+    const daysArr = Array.from({ length: days }, (_, i) => {
+      const d = new Date(now - (days - 1 - i) * 86400000);
+      d.setHours(0, 0, 0, 0);
+      return { ts: d.getTime(), label: d.toLocaleDateString(), count: 0 };
     });
-    for (const it of periodInsights) {
+
+    periodInsights.forEach((it) => {
       const d = new Date(it.timestamp ?? now);
       d.setHours(0, 0, 0, 0);
-      const idx = Math.floor((d.getTime() - daysArr[0].ts) / (24 * 60 * 60 * 1000));
-      if (idx >= 0 && idx < daysArr.length) daysArr[idx].count += 1;
-    }
-    return daysArr.map((d) => ({ label: d.label, count: d.count }));
+      const index = Math.floor(
+        (d.getTime() - daysArr[0].ts) / 86400000
+      );
+      if (index >= 0 && index < daysArr.length) daysArr[index].count += 1;
+    });
+
+    return daysArr;
   }, [period, periodInsights, now]);
 
-  // total items in period
+  /* -----------------------------
+      RENDER
+  ----------------------------- */
   const totalItems = periodInsights.length;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>AI Predictions Summary</CardTitle>
+        <CardTitle className="text-lg font-bold text-indigo-700">
+          AI Predictions Summary
+        </CardTitle>
       </CardHeader>
+
       <CardContent>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* ---------------- LEFT SIDE ---------------- */}
+          <div className="flex-1">
+            {/* TOP CONDITION + PERIOD SELECTOR */}
+            <div className="flex flex-wrap items-center gap-6 mb-6">
+
+              {/* TOP CONDITION */}
               <div>
                 <div className="text-sm text-gray-500">Top Condition</div>
-                <div className="text-xl font-semibold" style={{ color: CLASS_MAP[topClassIdx]?.color ?? "#111" }}>
-                  {CLASS_MAP[topClassIdx]?.label ?? String(topClassIdx)}
+                <div
+                  className="text-xl font-semibold"
+                  style={{
+                    color: CLASS_MAP[topClassIdx]?.color ?? "#111",
+                  }}
+                >
+                  {CLASS_MAP[topClassIdx]?.label ?? topClassIdx}
                 </div>
               </div>
 
-              <div className="px-3 py-2 rounded bg-gray-50">
+              {/* PERIOD SELECTOR */}
+              <div className="px-3 py-2 rounded bg-gray-50 border">
                 <div className="text-xs text-gray-500">Period</div>
                 <div className="flex gap-2 mt-1">
                   {periodOptions.map((p) => (
                     <button
                       key={p}
                       onClick={() => setPeriod(p)}
-                      className={`px-3 py-1 rounded text-sm ${period === p ? "bg-indigo-600 text-white" : "bg-transparent border"}`}
+                      className={`px-3 py-1 rounded text-sm border transition ${
+                        period === p
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
                     >
-                      {p === "7d" ? "7 days" : "30 days"}
+                      {p === "7d" ? "Last 7 days" : "Last 30 days"}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="ml-4">
+              {/* TOTAL ITEMS */}
+              <div>
                 <div className="text-xs text-gray-500">Items</div>
                 <div className="font-medium">{totalItems}</div>
               </div>
 
-              <div className="ml-4">
+              {/* TREND */}
+              <div>
                 <div className="text-xs text-gray-500">Trend</div>
                 <div className="flex items-center gap-2">
-                  {trendDelta.diff > 0 ? <ArrowUp className="text-green-600" /> : trendDelta.diff < 0 ? <ArrowDown className="text-red-600" /> : <span className="text-gray-500">—</span>}
+                  {trendDelta.diff > 0 ? (
+                    <ArrowUp className="text-green-600" />
+                  ) : trendDelta.diff < 0 ? (
+                    <ArrowDown className="text-red-600" />
+                  ) : (
+                    <span className="text-gray-500">—</span>
+                  )}
                   <div className="text-sm">{trendDelta.pct}%</div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-4">
-              <div className="text-sm text-gray-600 mb-2">Activity (sparkline)</div>
-              <div style={{ width: "100%", height: 48 }}>
+            {/* SPARKLINE */}
+            <div>
+              <div className="text-sm text-gray-600 mb-2">
+                Activity (sparkline)
+              </div>
+              <div className="h-12 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={sparkData}>
-                    <Line dataKey="count" stroke="#6366F1" strokeWidth={2} dot={false} isAnimationActive={false} />
+                    <Line
+                      dataKey="count"
+                      stroke="#6366F1"
+                      strokeWidth={2}
+                      dot={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
 
-          {/* Right side: small bar chart */}
-          <div style={{ width: 300, minWidth: 200 }}>
-            <div className="text-sm text-gray-600 mb-2">Class distribution</div>
-            <div style={{ width: "100%", height: 180 }}>
+          {/* ---------------- RIGHT SIDE ---------------- */}
+          <div className="lg:w-[320px]">
+            <div className="text-sm text-gray-600 mb-2">
+              Class Distribution
+            </div>
+            <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
-                  <YAxis dataKey="label" type="category" width={90} />
+                  <YAxis
+                    dataKey="label"
+                    type="category"
+                    width={90}
+                  />
                   <Tooltip />
-                  <Bar dataKey="count" isAnimationActive={false}>
+                  <Bar dataKey="count">
                     {chartData.map((row) => (
-                      <Cell key={String(row.cls)} fill={row.color} />
+                      <Cell
+                        key={row.cls}
+                        fill={row.color}
+                      />
                     ))}
                   </Bar>
                 </BarChart>
